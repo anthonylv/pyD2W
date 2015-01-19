@@ -1,9 +1,15 @@
 #!/usr/bin/python
 import MySQLdb as mdb
+import os
+import subprocess
 # Ensures cursors are closed upon completion of with block
 # See discussion at http://stackoverflow.com/questions/5669878/python-mysqldb-when-to-close-cursors
 from contextlib import closing
-
+# Suppress warnings for tables that have not been created
+import warnings
+warnings.filterwarnings("ignore", "Unknown table.*")
+# Uncomment to suppress all warnings
+#warnings.simplefilter("ignore")
 
 class Database:
     _db_connection = None
@@ -22,9 +28,6 @@ class Database:
         
         try:
             self._db_connection = mdb.connect(host, user, password, database)
-            # self._db_cur = self._db_connection.cursor(mdb.cursors.DictCursor)
-            # Try opening a normal cursor to get rollbacks
-            # self._db_cur = self._db_connection.cursor()
         except:
             print "Unable to connect to database"
         
@@ -38,15 +41,6 @@ class Database:
 
     def query(self, query, params=None):
         results = None
-        '''
-        try:
-            self._db_cur = self._db_connection.cursor(mdb.cursors.DictCursor)
-            self._db_cur.execute(query)
-            results = self._db_cur.fetchall()            
-        except:
-            print "Error: unable to fetch data"
-        return results
-        '''
         with closing(self._db_connection.cursor(mdb.cursors.DictCursor)) as cur:
             cur.execute(query)
             results = cur.fetchall()
@@ -111,10 +105,65 @@ class Database:
         return self.query("SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;")
         
     
-    def insert_fixed_term_names(self):
+    # Insert term names that have been processed to meet WordPress' criteria
+    def insert_processed_term_names(self, tid, name):
+        query = "INSERT INTO acc_processed_term_names (tid, name) VALUES ("+str(tid)+", '"+name+"');"
+        self.insert(query)
+    
+    
+    # Create some working tables to hold temporary data
+    # Useful for debugging migration problems
+    def create_working_tables(self):
         self.query("CREATE TABLE IF NOT EXISTS acc_fixed_term_names ( tid INT(10) NOT NULL UNIQUE, name VARCHAR(255)) ENGINE=INNODB;")
-        self.insert("INSERT INTO acc_fixed_term_names (tid, name) VALUES (938, 'test name 01');")
 
+
+    # We need to clean up working tables when running multiple migration passes
+    # Execute as individual statements as MySQLdb doesn't seem to support
+    # multiple statement execution
+    def cleanup_tables(self):
+        # Temporary working tables
+        # This will generate warnings if the tables don't exist so we suppress them with
+        # warnings.filterwarnings upon import of Warnings module
+        self.query("DROP TABLE IF EXISTS acc_duplicates;")
+        self.query("DROP TABLE IF EXISTS acc_news_terms;")
+        self.query("DROP TABLE IF EXISTS acc_tags_terms;")
+        self.query("DROP TABLE IF EXISTS acc_wp_tags;")
+        self.query("DROP TABLE IF EXISTS acc_users_post_count;")
+        self.query("DROP TABLE IF EXISTS acc_users_comment_count;")
+        self.query("DROP TABLE IF EXISTS acc_users_with_content;")
+        self.query("DROP TABLE IF EXISTS acc_users_post_count;")
+        # WordPress tables
+        # Commented out because WordPress tables are now cleaned up
+        # by importing the WordPress dump file
+        #self.query("TRUNCATE TABLE acc_export_wp_comments;")
+        #self.query("TRUNCATE TABLE acc_export_wp_links;")
+        #self.query("TRUNCATE TABLE acc_export_wp_postmeta;")
+        #self.query("TRUNCATE TABLE acc_export_wp_posts;")
+        #self.query("TRUNCATE TABLE acc_export_wp_term_relationships;")
+        #self.query("TRUNCATE TABLE acc_export_wp_term_taxonomy;")
+        #self.query("TRUNCATE TABLE acc_export_wp_terms;")
+        #self.query("TRUNCATE TABLE acc_export_wp_users;")
+        # For some installations, we make changes to the wp_usermeta table
+        # self.query("TRUNCATE TABLE acc_export_wp_usermeta;")
+
+
+    def execute_sql_file(self, sql_file):
+        success = False
+        if os.path.isfile(sql_file):
+            print "Executing SQL file..."
+            # This will produce a warning about using the password on the command line being insecure
+            # I've not found a way to suppress the warning and Popen from subprocess module
+            # doesn't seem to work with running a mysql script
+            command = "mysql -u"+self._user+" -p"+self._password+" "+self._database+" < "+sql_file
+            result = os.system(command)
+            if result != 0:
+                print "Sorry, something went wrong when executing the SQL file." \
+                "Please check error messages."
+            else:
+                success = True
+        else:
+            print "Could not find a SQL file"
+        return success
         
     def __del__(self):
         if self._db_connection:

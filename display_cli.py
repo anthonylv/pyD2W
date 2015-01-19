@@ -45,7 +45,8 @@ Usage: drupaltowordpress.py [option] ... [-d diagnostic | -f fix | -h help]
 Options:
 -d diagnostic     : Run diagnostic
 -f fix            : Try to fix database problems
--h help           : Hostname to connect to
+-h help           : Display options
+-r reset          : Reset the tables into a clean state ready for another migration pass
 """    
 
 #

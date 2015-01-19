@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 # Create unique term names by appending tid (term id)
-def fix_duplicate_term_names(drupal_terms_with_duplicate_names):
+def process_duplicate_term_names(drupal_terms_with_duplicate_names):
     updated_terms = list()
     duplicate_terms_count = len(drupal_terms_with_duplicate_names)
     if duplicate_terms_count > 0:

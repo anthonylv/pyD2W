@@ -1,17 +1,16 @@
 #!/usr/bin/python
-import sys, getopt
+import sys, getopt, os
 import display_cli as cli
-import database_fixer as fixer
+import database_processor as processor
 import settings
 from database_interface import Database
 
-
 def run_diagnostics():
     database = Database(
-        settings.getDrupalHost(),
-        settings.getDrupalUsername(),
-        settings.getDrupalPassword(),
-        settings.getDrupalDatabase()
+        settings.get_drupal_host(),
+        settings.get_drupal_username(),
+        settings.get_drupal_password(),
+        settings.get_drupal_database()
     )
     if database.connected():
         # General analysis of Drupal database properties
@@ -35,37 +34,52 @@ def run_diagnostics():
         cli.print_diagnostics(results)
     else:
         print "No database connection"
-    
+
+
+# Reset the tables into a clean state ready for another migration pass
+def reset():
+    wp_tables_setup_success = False
+    database = Database(
+        settings.get_drupal_host(),
+        settings.get_drupal_username(),
+        settings.get_drupal_password(),
+        settings.get_drupal_database()
+    )
+    if database.connected():
+        database.cleanup_tables()
+        wordpress_setup_file = os.path.dirname(os.path.realpath(__file__))+settings.get_wordpress_setup_sql_script_filename()
+        if os.path.isfile(wordpress_setup_file):
+            wp_tables_setup_success = database.execute_sql_file(wordpress_setup_file)
+        else:
+            print "Could not find a SQL script file to setup the WordPress tables"
+    else:
+        print "No database connection"
+    if wp_tables_setup_success:
+        print "WordPress export tables were created"
+    else:
+        print "Could not create WordPress export tables"
 
 def run_fix():
     print "This process will alter your database"
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
         database = Database(
-            settings.getDrupalHost(),
-            settings.getDrupalUsername(),
-            settings.getDrupalPassword(),
-            settings.getDrupalDatabase()
+            settings.get_drupal_host(),
+            settings.get_drupal_username(),
+            settings.get_drupal_password(),
+            settings.get_drupal_database()
         )
         if database.connected():
             drupal_terms_with_duplicate_names = database.get_drupal_terms_with_duplicate_names()
-            fixed_term_names = fixer.fix_duplicate_term_names(drupal_terms_with_duplicate_names)
+            fixed_term_names = processor.process_duplicate_term_names(drupal_terms_with_duplicate_names)
             
-            
-            result = database.insert_fixed_term_names()
-            return result;
-            
-
             for term in fixed_term_names:
+                result = database.insert_processed_term_names(term["tid"], term["name"])
+	            #pass
                 #print "[{}] : {}".format(term["tid"], term["name"])
-                '''
-                TO DO:
-                Compare drupal_terms_with_duplicate_names with fixed_term_names
-                Ensure tid are same
-                
-                '''
-                
-                
+                # TO DO:
+                # Compare drupal_terms_with_duplicate_names with fixed_term_names
+                # Ensure tid are same                
         else:
             print "No database connection"
     else:
@@ -74,7 +88,7 @@ def run_fix():
         
 def main(argv):
     try:
-      opts, args = getopt.getopt(argv,"dfh",["fix", "help", "diagnostic"])
+      opts, args = getopt.getopt(argv,"dfhr",["fix", "help", "diagnostic", "reset"])
     except getopt.GetoptError:
       cli.print_usage()
       sys.exit(2)
@@ -89,7 +103,9 @@ def main(argv):
             elif opt in ("-d", "--diagnostic"):
                 run_diagnostics()
             elif opt in ("-f", "--fix"):
-                run_fix()            
+                run_fix()
+            elif opt in ("-r", "--reset"):
+                reset()
                 
     
 if __name__ == "__main__":
