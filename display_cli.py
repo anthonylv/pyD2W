@@ -10,6 +10,7 @@ def print_diagnostics(diagnostic_results):
     drupal_node_types = diagnostic_results["node_types"]
     drupal_terms_exceeded_charlength = diagnostic_results["terms_exceeded_charlength"]
     drupal_dupliate_alias = diagnostic_results["dupliate_alias"]
+    drupal_node_count_by_type = diagnostic_results["node_count_by_type"] 
         
     print "\n=================================================="
     print "Starting Drupal To WordPress diagnostics"
@@ -34,19 +35,39 @@ def print_diagnostics(diagnostic_results):
     table_node_types = PrettyTable(["Node type"])
     table_node_types.align["Node type"] = "l"
     for row in drupal_node_types:
-        table_node_types.add_row([row["type"]])
-    
+        table_node_types.add_row([row["type"]])    
     print table_node_types
     
-
+    # Print Node count by content type table
+    table_node_count_by_type = PrettyTable(["Node type", "Name", "Count"])
+    table_node_count_by_type.align["Node type"] = "l"
+    table_node_count_by_type.align["Name"] = "l"
+    table_node_count_by_type.align["Count"] = "l"        
+    for row in drupal_node_count_by_type:
+        table_node_count_by_type.add_row([row["type"], row["name"], row["node_count"]])
+    print table_node_count_by_type
+    
+    
+# For usage format, see http://en.wikipedia.org/wiki/Usage_message
 def print_usage():
     print """\
-Usage: drupaltowordpress.py [option] ... [-d diagnostic | -f fix | -h help]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|reset] [-d=database_name]
+
 Options:
--d diagnostic     : Run diagnostic
--f fix            : Try to fix database problems
--h help           : Display options
--r reset          : Reset the tables into a clean state ready for another migration pass
+-a act, --action act
+    Perform an action on the database (see Actions section below)
+    
+-d database_name, --database database_name
+    Perform the action on database specified by database_name
+    
+-h, --help
+    Display options
+
+Actions:
+analyse     : Analyse the Drupal database
+fix         : Try to fix database problems
+reset       : Reset the tables into a clean state ready for another migration pass
+
 """    
 
 #

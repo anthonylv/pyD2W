@@ -72,6 +72,13 @@ class Database:
     def get_drupal_node_types(self):
         return self.query("SELECT DISTINCT type, name, description FROM node_type n ")
 
+    # Get the number of nodes for each Drupal content type
+    def get_drupal_node_count_by_type(self):
+        return self.query("SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
+            "FROM node " \
+            "INNER JOIN node_type ON node.type = node_type.type " \
+            "GROUP BY node_type.type;")
+
       
     # We can't import duplicate terms into the WordPress wp_terms table
     # Get aggregate of terms with duplicate names; we don't want each individual term
