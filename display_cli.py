@@ -1,9 +1,20 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""Output pyD2W results to the command line.
+
+This module handles display of pyD2W results to the command line.
+"""
+
 import sys
 from prettytable import PrettyTable
 
 
 def print_diagnostics(diagnostic_results):
+    """Print the diagnostic results to the command line.
+    
+    Args:
+        diagnostic_results (dictionary): A dictionary containing the results.
+    """
     drupal_posts = diagnostic_results["posts"]
     drupal_terms = diagnostic_results["terms"]
     drupal_duplicate_terms = diagnostic_results["duplicate_terms"]
@@ -46,12 +57,15 @@ def print_diagnostics(diagnostic_results):
     for row in drupal_node_count_by_type:
         table_node_count_by_type.add_row([row["type"], row["name"], row["node_count"]])
     print table_node_count_by_type
-    
-    
-# For usage format, see http://en.wikipedia.org/wiki/Usage_message
+
+
 def print_usage():
+    """Print usage instructions to the screen.
+    
+    For the usage format, see http://en.wikipedia.org/wiki/Usage_message.
+    """
     print """\
-Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|reset] [-d=database_name]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|reset|sqlscript] [-d=database_name] [-s=script_path]
 
 Options:
 -a act, --action act
@@ -59,7 +73,10 @@ Options:
     
 -d database_name, --database database_name
     Perform the action on database specified by database_name
-    
+
+-s script_path, --sqlscript script_path
+    Run a MySQL script file specified by script_path
+
 -h, --help
     Display options
 
@@ -68,20 +85,21 @@ analyse     : Analyse the Drupal database
 fix         : Try to fix database problems
 reset       : Reset the tables into a clean state ready for another migration pass
 
-"""    
+"""
 
-#
-# Recipe from http://code.activestate.com/recipes/577058/
-#
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.
-
-    "question" is a string that is presented to the user.
-    "default" is the presumed answer if the user just hits <Enter>.
-        It must be "yes" (the default), "no" or None (meaning
-        an answer is required of the user).
+    
+    Args:
+        question (string): is a string that is presented to the user.
+        default (string): is the presumed answer if the user just hits <Enter>.
+            It must be "yes" (the default), "no" or None (meaning
+            an answer is required of the user).
 
     The "answer" return value is True for "yes" or False for "no".
+    
+    This code is a recipe from http://code.activestate.com/recipes/577058/.
     """
     valid = {"yes": True, "y": True, "ye": True,
              "no": False, "n": False}

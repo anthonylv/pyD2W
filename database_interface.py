@@ -1,4 +1,9 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""Provide an interface to the CMS database.
+
+This module provides a wrapper to interfacing with the content management system database.
+"""
 import MySQLdb as mdb
 import os
 import subprocess
@@ -33,6 +38,11 @@ class Database:
         
 
     def connected(self):
+        """Check if there is an open database connection.
+        
+        Returns:
+            boolean: True if there is an open database connection, False otherwise.
+        """
         connection_status = False
         if self._db_connection:
             connection_status = True
@@ -40,14 +50,30 @@ class Database:
     
 
     def query(self, query, params=None):
+        """Run a MySQL query string.
+
+        Args:
+            query (string): MySQL query string.
+
+        Returns:
+            results: Results of the query.
+        """
         results = None
         with closing(self._db_connection.cursor(mdb.cursors.DictCursor)) as cur:
             cur.execute(query)
             results = cur.fetchall()
         return results
-        
+
 
     def insert(self, query, params=None):
+        """Run a MySQL INSERT query string.
+
+        Args:
+            query (string): MySQL query string.
+
+        Returns:
+            results: Results of the query.
+        """        
         results = None
         try:
             cur = self._db_connection.cursor()
@@ -59,75 +85,99 @@ class Database:
             self._db_connection.rollback()
             cur.close()
         return results
-                
-        
+
+
     def get_drupal_posts(self):
         return self.query("SELECT DISTINCT nid, FROM_UNIXTIME(created) post_date, title, type FROM node")
         
-        
+
     def get_drupal_terms(self):
         return self.query("SELECT DISTINCT tid, name, REPLACE(LOWER(name), ' ', '_') slug, 0 FROM term_data WHERE (1);")
-
     
+
     def get_drupal_node_types(self):
         return self.query("SELECT DISTINCT type, name, description FROM node_type n ")
 
-    # Get the number of nodes for each Drupal content type
+
     def get_drupal_node_count_by_type(self):
+        """Get the number of nodes for each Drupal content type."""        
         return self.query("SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
             "FROM node " \
             "INNER JOIN node_type ON node.type = node_type.type " \
             "GROUP BY node_type.type;")
 
-      
-    # We can't import duplicate terms into the WordPress wp_terms table
-    # Get aggregate of terms with duplicate names; we don't want each individual term
-    # entry with a duplicate name
+
     def get_drupal_duplicate_term_names(self):
+        """Get any duplicate term names.
+        
+        We can't import duplicate terms into the WordPress wp_terms table
+        Get aggregate of terms with duplicate names; we don't want each individual term
+        entry with a duplicate name
+        """
         return self.query("SELECT tid, name, COUNT(*) c FROM term_data GROUP BY name HAVING c > 1")
 
 
-    # Get each individual term that has a duplicate; different from the aggregate of terms with duplicate names
     def get_drupal_terms_with_duplicate_names(self):
+        """Get each individual term that has a duplicate.
+        
+        This is different from get_drupal_duplicate_term_names() because
+        it gets the aggregate of terms with duplicate names.
+        """
         return self.query("SELECT term_data.tid, term_data.name FROM term_data INNER JOIN ( SELECT name FROM term_data GROUP BY name HAVING COUNT(name) >1 ) temp ON term_data.name=temp.name")
- 
 
-    # WordPress term name field is set 200 chars but Drupal's is term name is 255 chars
+
     def get_terms_exceeded_charlength(self):
+        """Get any terms that exceed WordPress' character length.
+        
+        WordPress term name field is set 200 chars but Drupal's is term name is 255 chars.
+        """
         return self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
-        
-    
-    # The node ID in Drupal's node table is used to create the post ID in WordPress' wp_posts table.
-    #
-    # The post name in WordPress' wp_posts table is created using either
-    #   (a) the url alias (dst field) in Drupal's url_alias table OR
-    #   (b) the node id (nid) in Drupal's node table IF there is no url alias
-    #
-    # If there are multiple Drupal aliases with the same node ID, we will end up trying to create multiple entries
-    # into the WordPress wp_posts table with the same wp_posts ID. This will cause integrity constraint violation
-    # errors since wp_posts ID is a unique primary key.
-    #
-    # To avoid this error, we need to check for duplicate aliases
+
+
     def get_dupliate_alias(self):
-        return self.query("SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;")
+        """Get any duplicate aliases.
         
-    
-    # Insert term names that have been processed to meet WordPress' criteria
+        The node ID in Drupal's node table is used to create the post ID in WordPress' wp_posts table.
+
+        The post name in WordPress' wp_posts table is created using either
+          (a) the url alias (dst field) in Drupal's url_alias table OR
+          (b) the node id (nid) in Drupal's node table IF there is no url alias
+
+        If there are multiple Drupal aliases with the same node ID, we will end up trying to create multiple entries
+        into the WordPress wp_posts table with the same wp_posts ID. This will cause integrity constraint violation
+        errors since wp_posts ID is a unique primary key.
+
+        To avoid this error, we need to check for duplicate aliases
+        """
+        return self.query("SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;")
+
+
     def insert_processed_term_names(self, tid, name):
+        """Insert term names that have been processed to meet WordPress' criteria.
+        
+        Args:
+            tid (integer): The Drupal taxonomy ID.
+            name (string): The Drupal taxonomy name.
+        """
         query = "INSERT INTO acc_processed_term_names (tid, name) VALUES ("+str(tid)+", '"+name+"');"
         self.insert(query)
-    
-    
-    # Create some working tables to hold temporary data
-    # Useful for debugging migration problems
+
+
     def create_working_tables(self):
+        """Create some working tables to hold temporary data.
+        
+        This function creates working tables useful for debugging migration problems.
+        """
         self.query("CREATE TABLE IF NOT EXISTS acc_fixed_term_names ( tid INT(10) NOT NULL UNIQUE, name VARCHAR(255)) ENGINE=INNODB;")
 
 
-    # We need to clean up working tables when running multiple migration passes
-    # Execute as individual statements as MySQLdb doesn't seem to support
-    # multiple statement execution
     def cleanup_tables(self):
+        """Cleanup working tables.
+    
+        We need to clean up working tables when running multiple migration passes.
+        Execute as individual statements as MySQLdb doesn't seem to support
+        multiple statement execution
+        """
         # Temporary working tables
         # This will generate warnings if the tables don't exist so we suppress them with
         # warnings.filterwarnings upon import of Warnings module
@@ -155,18 +205,22 @@ class Database:
 
 
     def execute_sql_file(self, sql_file):
+        """Use mysql on the command line to execute a MySQL file.
+
+        This will produce a warning about using the password on the command line being insecure.
+        I've not found a way to suppress the warning and Popen from subprocess module
+        doesn't seem to work with running a mysql script.
+        """
         success = False
         if os.path.isfile(sql_file):
             print "Executing SQL file..."
-            # This will produce a warning about using the password on the command line being insecure
-            # I've not found a way to suppress the warning and Popen from subprocess module
-            # doesn't seem to work with running a mysql script
             command = "mysql -u"+self._user+" -p"+self._password+" "+self._database+" < "+sql_file
             result = os.system(command)
             if result != 0:
                 print "Sorry, something went wrong when executing the SQL file." \
-                "Please check error messages."
+                "Please check error messages"
             else:
+                print "Script run complete"
                 success = True
         else:
             print "Could not find a SQL file"
