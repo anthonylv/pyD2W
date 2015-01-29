@@ -22,7 +22,7 @@ def print_diagnostics(diagnostic_results):
     drupal_terms_exceeded_charlength = diagnostic_results["terms_exceeded_charlength"]
     drupal_dupliate_alias = diagnostic_results["dupliate_alias"]
     drupal_node_count_by_type = diagnostic_results["node_count_by_type"] 
-        
+
     print "\n=================================================="
     print "Starting Drupal To WordPress diagnostics"
     print "==================================================\n"

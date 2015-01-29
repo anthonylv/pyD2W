@@ -66,17 +66,32 @@ def reset(database):
     Args:
         database: An open connection to the Drupal database.
     """
+    drupal_tables_setup_success = False
     wp_tables_setup_success = False
     if database.connected():
         database.cleanup_tables()
-        wordpress_setup_file = (os.path.dirname(os.path.realpath(__file__)) +
-                                settings.get_wordpress_setup_sql_script_filename())
+
+        drupal_setup_file = (os.path.dirname(
+            os.path.realpath(__file__)) + settings.get_drupal_setup_script())
+        wordpress_setup_file = (os.path.dirname(
+            os.path.realpath(__file__)) + settings.get_wordpress_setup_script())
+        if os.path.isfile(drupal_setup_file):
+            drupal_tables_setup_success = database.execute_sql_file(drupal_setup_file)
+        else:
+            print "Could not find a SQL script file to setup the WordPress tables"
+
         if os.path.isfile(wordpress_setup_file):
             wp_tables_setup_success = database.execute_sql_file(wordpress_setup_file)
         else:
             print "Could not find a SQL script file to setup the WordPress tables"
     else:
         print "No database connection"
+
+    if drupal_tables_setup_success:
+        print "Drupal tables reset to a clean state"
+    else:
+        print "Could not reset Drupal tables to a clean state"
+
     if wp_tables_setup_success:
         print "WordPress export tables were created"
     else:
@@ -93,16 +108,17 @@ def run_fix(database):
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
         if database.connected():
-            terms_with_duplicate_names = database.get_drupal_terms_with_duplicate_names()
+            # Warning: this may push the name length past WordPress' 200 char limit
+            terms_with_duplicate_names = database.get_drupal_duplicate_terms()
             fixed_term_names = processor.process_duplicate_term_names(
                 terms_with_duplicate_names)
             for term in fixed_term_names:
-                #result = database.insert_processed_term_names(term["tid"], term["name"])
-	            #pass
-                print "[{}] : {}".format(term["tid"], term["name"])
-                # TO DO:
-                # Compare drupal_terms_with_duplicate_names with fixed_term_names
-                # Ensure tid are same
+                result = database.update_processed_term_name(term["tid"], term["name"])
+                print "Fixing duplicate: ["+term["tid"]+"]"+term["name"]
+            # Warning: this may undo duplicates fix if the term was close to the 200 char limit
+            database.update_term_name_length()
+            database.uniquify_url_alias()
+            print "Fix complete"
         else:
             print "No database connection"
     else:
@@ -136,6 +152,7 @@ def migrate(database):
     Args:
         database: An open connection to the Drupal database.
     """
+
     print "This process will alter your database"
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
@@ -157,7 +174,7 @@ def migrate(database):
 
 def process_action(action, options):
     """Process the command line options.
-    
+
     Args:
         action (string): A string containing the action to run.
         options (dictionary): A dictionary of options.
@@ -168,7 +185,7 @@ def process_action(action, options):
         selected_database = options['db_option']
     else:
         selected_database = settings.get_drupal_database()
-            
+
     database = Database(
         settings.get_drupal_host(),
         settings.get_drupal_username(),
@@ -191,8 +208,8 @@ def process_action(action, options):
             print "You need to provide a path to the script."
             cli.print_usage()
     elif action == "reset":
-        print "reset() with "+selected_database
-        #reset(database)
+        #print "reset() with "+selected_database
+        reset(database)
     else:
         cli.print_usage()
 
