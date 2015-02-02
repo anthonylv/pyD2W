@@ -15,13 +15,14 @@ def print_diagnostics(diagnostic_results):
     Args:
         diagnostic_results (dictionary): A dictionary containing the results.
     """
-    drupal_posts = diagnostic_results["posts"]
-    drupal_terms = diagnostic_results["terms"]
-    drupal_duplicate_terms = diagnostic_results["duplicate_terms"]
-    drupal_node_types = diagnostic_results["node_types"]
-    drupal_terms_exceeded_charlength = diagnostic_results["terms_exceeded_charlength"]
-    drupal_dupliate_alias = diagnostic_results["dupliate_alias"]
-    drupal_node_count_by_type = diagnostic_results["node_count_by_type"] 
+    drupal_posts_count = diagnostic_results["posts_count"]
+    drupal_terms_count = diagnostic_results["terms_count"]
+    drupal_duplicate_terms_count = diagnostic_results["duplicate_terms_count"]
+    drupal_node_types_count = diagnostic_results["node_types_count"]
+    drupal_terms_exceeded_char_count = diagnostic_results["terms_exceeded_char_count"]
+    drupal_duplicate_aliases_count = diagnostic_results["duplicate_aliases_count"]
+    drupal_node_count_by_type = diagnostic_results["node_count_by_type"]
+    drupal_node_types = diagnostic_results["node_types"]    
 
     print "\n=================================================="
     print "Starting Drupal To WordPress diagnostics"
@@ -31,12 +32,12 @@ def print_diagnostics(diagnostic_results):
     table_properties = PrettyTable(["Property", "Found in Drupal"])
     table_properties.align["Property"] = "l"
     table_properties.align["Found in Drupal"] = "l"
-    table_properties.add_row(["Terms", "There are {} terms".format(len(drupal_terms))] )
-    table_properties.add_row( ["Node types", "There are {} node types".format(len(drupal_node_types))] )
-    table_properties.add_row( ["Post entries", "There are {} post entries".format(len(drupal_posts))] )
-    table_properties.add_row( ["Duplicate terms", "There are {} duplicate terms".format(len(drupal_duplicate_terms))] )    
-    table_properties.add_row( ["Term character length exceeded", "{} terms exceed WordPress' 200 character length".format(len(drupal_terms_exceeded_charlength))] )
-    table_properties.add_row( ["Duplicate aliases", "{} duplicate aliases found".format(len(drupal_dupliate_alias))] )    
+    table_properties.add_row(["Terms", "There are {} terms".format(drupal_terms_count)] )
+    table_properties.add_row( ["Node types", "There are {} node types".format(drupal_node_types_count)] )
+    table_properties.add_row( ["Post entries", "There are {} post entries".format(drupal_posts_count)] )
+    table_properties.add_row( ["Duplicate terms", "There are {} duplicate terms".format(drupal_duplicate_terms_count)] )    
+    table_properties.add_row( ["Term character length exceeded", "{} terms exceed WordPress' 200 character length".format(drupal_terms_exceeded_char_count)] )
+    table_properties.add_row( ["Duplicate aliases", "{} duplicate aliases found".format(drupal_duplicate_aliases_count)] )    
     print table_properties
     
     # Print Node Types Table

@@ -34,34 +34,41 @@ def run_diagnostics(database):
     Args:
         database: An open connection to the Drupal database.
     """
+    results = {}
     if database.connected():
         # General analysis of Drupal database properties
-        drupal_posts = database.get_drupal_posts()
-        drupal_terms = database.get_drupal_terms()
+        drupal_posts_count = len(database.get_drupal_posts())
+        drupal_terms_count = len(database.get_drupal_terms())
         drupal_node_types = database.get_drupal_node_types()
+        drupal_node_types_count = len(drupal_node_types)
         drupal_node_count_by_type = database.get_drupal_node_count_by_type()
 
         # Look for common problems
-        duplicate_terms = database.get_drupal_duplicate_term_names()
-        terms_exceeded_charlength = database.get_terms_exceeded_charlength()
-        dupliate_alias = database.get_dupliate_alias()
+        duplicate_terms_count = len(database.get_drupal_duplicate_term_names())
+        terms_exceeded_char_count = len(database.get_terms_exceeded_charlength())
+        duplicate_aliases_count = len(database.get_duplicate_aliases())
 
         results = {
-            "posts": drupal_posts,
-            "terms": drupal_terms,
-            "duplicate_terms": duplicate_terms,
+            "posts_count": drupal_posts_count,
+            "terms_count": drupal_terms_count,
+            "duplicate_terms_count": duplicate_terms_count,
+            "node_types_count": drupal_node_types_count,
             "node_types": drupal_node_types,
-            "terms_exceeded_charlength": terms_exceeded_charlength,
-            "dupliate_alias": dupliate_alias,
+            "terms_exceeded_char_count": terms_exceeded_char_count,
+            "duplicate_aliases_count": duplicate_aliases_count,
             "node_count_by_type": drupal_node_count_by_type
         }
-        cli.print_diagnostics(results)
     else:
         print "No database connection"
+    return results
 
 
 def reset(database):
     """Reset the tables into a clean state ready for another migration pass.
+
+    Two external SQL scripts are needed:
+    * one to reset the Drupal database to its orginal pre-migration state;
+    * one to reset the WordPress tables to a newly installed state.
 
     Args:
         database: An open connection to the Drupal database.
@@ -113,11 +120,10 @@ def run_fix(database):
             fixed_term_names = processor.process_duplicate_term_names(
                 terms_with_duplicate_names)
             for term in fixed_term_names:
-                result = database.update_processed_term_name(term["tid"], term["name"])
-                print "Fixing duplicate: ["+term["tid"]+"]"+term["name"]
+                database.update_processed_term_name(term["tid"], term["name"])
             # Warning: this may undo duplicates fix if the term was close to the 200 char limit
             database.update_term_name_length()
-            database.uniquify_url_alias()
+            database.uniquify_url_aliases()
             print "Fix complete"
         else:
             print "No database connection"
@@ -126,7 +132,7 @@ def run_fix(database):
 
 
 def run_sql_script(database, filename):
-    """Run a specififed mySQL script.
+    """Run a specified mySQL script.
 
     Args:
         database: An open connection to the Drupal database.
@@ -147,25 +153,33 @@ def run_sql_script(database, filename):
 
 
 def migrate(database):
-    """Run the migration script - TO BE IMPLEMENTED.
+    """Run the migration script.
 
     Args:
         database: An open connection to the Drupal database.
     """
-
-    print "This process will alter your database"
+    print "The migration process will alter your database"
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
         if database.connected():
-            '''
-            check for problems
-            if there are problems
-                then prompt to run_fix()
-                exit
-            else
-                run the migration
-            '''
-            print "Run the migration"
+            diagnostic_results = run_diagnostics(database)
+            duplicate_terms_count = diagnostic_results["duplicate_terms_count"]
+            terms_exceeded_char_count = diagnostic_results["terms_exceeded_char_count"]
+            duplicate_aliases_count = diagnostic_results["duplicate_aliases_count"]
+
+            if (duplicate_terms_count > 0 or
+                    terms_exceeded_char_count > 0 or
+                    duplicate_aliases_count > 0):
+                print "There are problems that must be fixed before migrating."
+                run_fix(database)
+                print "Please re-run '-a migrate' to continue with the migration."
+            else:
+                standard_migration_file = (os.path.dirname(
+                    os.path.realpath(__file__)) + settings.get_migration_script())
+                if os.path.isfile(standard_migration_file):
+                    database.execute_sql_file(standard_migration_file)
+                else:
+                    print "Could not find the migration script at "+standard_migration_file
         else:
             print "No database connection"
     else:
@@ -195,7 +209,8 @@ def process_action(action, options):
 
     # Process command line options and arguments
     if action in ['analyse', 'analyze']:
-        run_diagnostics(database)
+        diagnostics_results = run_diagnostics(database)
+        cli.print_diagnostics(diagnostics_results)
     elif action == 'fix':
         run_fix(database)
     elif action == 'migrate':
@@ -208,7 +223,6 @@ def process_action(action, options):
             print "You need to provide a path to the script."
             cli.print_usage()
     elif action == "reset":
-        #print "reset() with "+selected_database
         reset(database)
     else:
         cli.print_usage()

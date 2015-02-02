@@ -153,7 +153,7 @@ class Database:
         return self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
 
 
-    def get_dupliate_alias(self):
+    def get_duplicate_aliases(self):
         """Get any duplicate aliases.
 
         The node ID in Drupal's node table is used to create the post ID in
@@ -173,7 +173,7 @@ class Database:
         return self.query("SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;")
 
 
-    def uniquify_url_alias(self):
+    def uniquify_url_aliases(self):
         """Remove duplicate aliases but keep a copy in a working table.
 
         URL alias will be used as the WordPress post slug but these need to be unique.
@@ -181,7 +181,7 @@ class Database:
         for later processing.
         """
         self.query("DROP TABLE IF EXISTS acc_url_alias_dups_removed;")
-        self.query("DROP TABLE IF EXISTS url_alias_with_dups;")
+        self.query("DROP TABLE IF EXISTS acc_url_alias_with_dups;")
         self.query("CREATE TABLE acc_url_alias_dups_removed \
                     AS SELECT pid, src, dst FROM url_alias GROUP BY src;")
         self.query("RENAME TABLE url_alias TO acc_url_alias_with_dups;")
@@ -228,10 +228,13 @@ class Database:
         self.query("DROP TABLE IF EXISTS acc_news_terms;")
         self.query("DROP TABLE IF EXISTS acc_tags_terms;")
         self.query("DROP TABLE IF EXISTS acc_wp_tags;")
+        self.query("DROP TABLE IF EXISTS acc_wp_categories;")
         self.query("DROP TABLE IF EXISTS acc_users_post_count;")
         self.query("DROP TABLE IF EXISTS acc_users_comment_count;")
         self.query("DROP TABLE IF EXISTS acc_users_with_content;")
         self.query("DROP TABLE IF EXISTS acc_users_post_count;")
+        self.query("DROP TABLE IF EXISTS acc_url_alias_dups_removed")
+        self.query("DROP TABLE IF EXISTS acc_url_alias_with_dups;")
         # WordPress tables
         # Commented out because WordPress tables are now cleaned up
         # by importing the WordPress dump file
@@ -260,7 +263,7 @@ class Database:
             command = "mysql -u"+self._user+" -p"+self._password+" "+self._database+" < "+sql_file
             result = os.system(command)
             if result != 0:
-                print "Sorry, something went wrong when executing the SQL file." \
+                print "Sorry, something went wrong when executing the SQL file. " \
                 "Please check error messages"
             else:
                 print "Script run complete"
