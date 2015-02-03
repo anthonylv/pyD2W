@@ -20,6 +20,7 @@ Actions:
 analyse     : Analyse the Drupal database
 fix         : Try to fix database problems
 reset       : Reset the tables into a clean state ready for another migration pass
+migrate     : Run the migration script
 """
 
 import sys, getopt, os
@@ -207,26 +208,28 @@ def process_action(action, options):
         selected_database
     )
 
-    # Process command line options and arguments
-    if action in ['analyse', 'analyze']:
-        diagnostics_results = run_diagnostics(database)
-        cli.print_diagnostics(diagnostics_results)
-    elif action == 'fix':
-        run_fix(database)
-    elif action == 'migrate':
-        migrate(database)
-    elif action == 'sqlscript':
-        # Has the user specified a sql script?
-        if 'script_option' in options:
-            run_sql_script(database, options['script_option'])
+    if database.connected():
+        # Process command line options and arguments
+        if action in ['analyse', 'analyze']:
+            diagnostics_results = run_diagnostics(database)
+            cli.print_diagnostics(diagnostics_results)
+        elif action == 'fix':
+            run_fix(database)
+        elif action == 'migrate':
+            migrate(database)
+        elif action == 'sqlscript':
+            # Has the user specified a sql script?
+            if 'script_option' in options:
+                run_sql_script(database, options['script_option'])
+            else:
+                print "You need to provide a path to the script."
+                cli.print_usage()
+        elif action == "reset":
+            reset(database)
         else:
-            print "You need to provide a path to the script."
             cli.print_usage()
-    elif action == "reset":
-        reset(database)
     else:
-        cli.print_usage()
-
+        print "No database connection"
 
 def main(argv):
     """Process the user's commands.
