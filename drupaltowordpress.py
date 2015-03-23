@@ -4,14 +4,17 @@
 
 This module is a helper utility to migrate a Drupal site to WordPress.
 
-Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|reset] [-d=database_name]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
 
 Options:
 -a act, --action act
     Perform an action on the database (see Actions section below)
-
+    
 -d database_name, --database database_name
     Perform the action on database specified by database_name
+
+-s script_path, --sqlscript script_path
+    Run a MySQL script file specified by script_path
 
 -h, --help
     Display options
@@ -19,8 +22,9 @@ Options:
 Actions:
 analyse     : Analyse the Drupal database
 fix         : Try to fix database problems
-reset       : Reset the tables into a clean state ready for another migration pass
 migrate     : Run the migration script
+reset       : Reset the tables into a clean state ready for another migration pass
+sqlscript   : Run the specified MySQL script file
 """
 
 import sys, getopt, os
@@ -37,7 +41,11 @@ def run_diagnostics(database):
     """
     results = {}
     if database.connected():
+        
+        check_tables(database)
+        
         # General analysis of Drupal database properties
+        drupal_version = database.get_drupal_version()
         drupal_posts_count = len(database.get_drupal_posts())
         drupal_terms_count = len(database.get_drupal_terms())
         drupal_node_types = database.get_drupal_node_types()
@@ -50,6 +58,7 @@ def run_diagnostics(database):
         duplicate_aliases_count = len(database.get_duplicate_aliases())
 
         results = {
+            "version": drupal_version,
             "posts_count": drupal_posts_count,
             "terms_count": drupal_terms_count,
             "duplicate_terms_count": duplicate_terms_count,
@@ -62,6 +71,30 @@ def run_diagnostics(database):
     else:
         print "No database connection"
     return results
+
+
+def check_tables(database):
+    """Check if the required tables are present.
+
+    Args:
+        database: An open connection to the Drupal database.    
+    """
+    print "Checking tables..."
+
+    tables = [
+        'node',
+        'node_type',
+        'system',
+        'term_data',
+        'url_alias'
+    ]
+
+    for table in tables:
+        count = database.get_table_count(table)
+        if count > 0:
+            print "{} exits".format(table)
+        else:
+            print "{} does not exist".format(table)
 
 
 def reset(database):
@@ -211,6 +244,7 @@ def process_action(action, options):
     if database.connected():
         # Process command line options and arguments
         if action in ['analyse', 'analyze']:
+            cli.print_diagnostics_header()
             diagnostics_results = run_diagnostics(database)
             cli.print_diagnostics(diagnostics_results)
         elif action == 'fix':
@@ -266,6 +300,8 @@ def main(argv):
     # Only process actions after getting all the specified options
     if action:
         process_action(action, options)
+    else:
+        print "You need to specify an action to perform or use -h flag to view usage instructions."
 
 
 # Program entry point

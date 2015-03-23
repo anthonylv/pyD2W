@@ -12,8 +12,9 @@ will be happy to do the work. Contact us at http://anothercoffee.net
 
 --- Installation and use ---
 (1) You will need to install the following Python modules:
-* MySQLdb
-* prettytable
+* MySQLdb for accessing MySQL databases
+* prettytable for displaying results in a table format
+* phpserialize for unserializing Drupal fields
 
 (2) Edit the included sql sample files in the sql-sample directory to
 suit your migration requirements. At a minimum, you will need the migration

@@ -225,8 +225,10 @@ REPLACE INTO acc_wp_posts (
 
 
 /*
+ * An example for handling custom content types.
  * Combine field teaser and links content into body
  */
+/*
 DROP TABLE IF EXISTS acc_wp_ct_links;
 CREATE TABLE acc_wp_ct_links AS
 	SELECT DISTINCT
@@ -258,7 +260,7 @@ SET
 WHERE p.type IN (
         'page',
         'story');
-            
+*/          
 
 /* Set the content types that should be converted into 'posts' */
 UPDATE acc_wp_posts SET post_type = 'post' 
@@ -304,6 +306,27 @@ UPDATE IGNORE acc_wp_term_relationships, acc_wp_term_taxonomy
  */
 UPDATE acc_wp_options SET option_value='159' WHERE option_name='default_category';
 UPDATE acc_wp_term_taxonomy SET taxonomy='category' WHERE term_id=159;/* Unclassified term */
+
+
+/********************
+ * Cleaning the post_name of illegal characters.
+ *
+ * This may be needed if the post appears in the dashboard but
+ * displays a blank but themed page upon viewing.
+ */
+/*
+UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\’', '') 
+WHERE post_name LIKE '%\’%';
+
+UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\‘', '') 
+WHERE post_name LIKE '%\‘%';
+
+UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\”', '') 
+WHERE post_name LIKE '%”%';
+
+UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\“', '') 
+WHERE post_name LIKE '%“%';
+*/
 
 
 /********************
