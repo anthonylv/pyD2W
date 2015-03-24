@@ -315,16 +315,16 @@ UPDATE acc_wp_term_taxonomy SET taxonomy='category' WHERE term_id=159;/* Unclass
  * displays a blank but themed page upon viewing.
  */
 /*
-UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\’', '') 
+UPDATE wp_posts SET post_name = REPLACE(post_name, '\’', '') 
 WHERE post_name LIKE '%\’%';
 
-UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\‘', '') 
+UPDATE wp_posts SET post_name = REPLACE(post_name, '\‘', '') 
 WHERE post_name LIKE '%\‘%';
 
-UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\”', '') 
+UPDATE wp_posts SET post_name = REPLACE(post_name, '\”', '') 
 WHERE post_name LIKE '%”%';
 
-UPDATE dietdetective_wp3.wp_posts SET post_name = REPLACE(post_name, '\“', '') 
+UPDATE wp_posts SET post_name = REPLACE(post_name, '\“', '') 
 WHERE post_name LIKE '%“%';
 */
 
