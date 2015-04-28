@@ -483,7 +483,7 @@ UPDATE acc_wp_options SET option_value = '/%postname%/' WHERE option_name = 'per
 DROP TABLE IF EXISTS acc_redirects;
 CREATE TABLE acc_redirects AS
 	SELECT
-		CONCAT('dietdetective_d6/', 
+		CONCAT('site_name/', 
 			IF(a.dst IS NULL,
 				CONCAT('node/', n.nid), 
 				a.dst
