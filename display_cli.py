@@ -26,7 +26,8 @@ def print_diagnostics(diagnostic_results):
     Args:
         diagnostic_results (dictionary): A dictionary containing the results.
     """
-    
+
+    sitename = diagnostic_results["sitename"]    
     version = diagnostic_results["version"]
     posts_count = diagnostic_results["posts_count"]
     terms_count = diagnostic_results["terms_count"]
@@ -37,7 +38,7 @@ def print_diagnostics(diagnostic_results):
     node_count_by_type = diagnostic_results["node_count_by_type"]
     node_types = diagnostic_results["node_types"]
 
-    print "Drupal version: {}".format(version)
+    print "{} runs Drupal version: {}".format(sitename, version)
     
     # Print Properties Table
     table_properties = PrettyTable(["Property", "Found in Drupal"])

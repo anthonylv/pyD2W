@@ -41,3 +41,4 @@ __pycache__/
 settings.py
 testing/
 sql/
+sql-projects/

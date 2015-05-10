@@ -9,7 +9,7 @@ Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|migrate|reset|sqlscript]
 Options:
 -a act, --action act
     Perform an action on the database (see Actions section below)
-    
+
 -d database_name, --database database_name
     Perform the action on database specified by database_name
 
@@ -41,33 +41,40 @@ def run_diagnostics(database):
     """
     results = {}
     if database.connected():
-        
-        check_tables(database)
-        
-        # General analysis of Drupal database properties
-        drupal_version = database.get_drupal_version()
-        drupal_posts_count = len(database.get_drupal_posts())
-        drupal_terms_count = len(database.get_drupal_terms())
-        drupal_node_types = database.get_drupal_node_types()
-        drupal_node_types_count = len(drupal_node_types)
-        drupal_node_count_by_type = database.get_drupal_node_count_by_type()
+        print "Checking tables..."
+        all_tables_present = check_tables(database)
 
-        # Look for common problems
-        duplicate_terms_count = len(database.get_drupal_duplicate_term_names())
-        terms_exceeded_char_count = len(database.get_terms_exceeded_charlength())
-        duplicate_aliases_count = len(database.get_duplicate_aliases())
+        if all_tables_present:
+            # General analysis of Drupal database properties
+            drupal_sitename = database.get_drupal_sitename()
+            drupal_version = database.get_drupal_version()
+            drupal_posts_count = len(database.get_drupal_posts())
+            drupal_terms_count = len(database.get_drupal_terms())
+            drupal_node_types = database.get_drupal_node_types()
+            drupal_node_types_count = len(drupal_node_types)
+            drupal_node_count_by_type = database.get_drupal_node_count_by_type()
 
-        results = {
-            "version": drupal_version,
-            "posts_count": drupal_posts_count,
-            "terms_count": drupal_terms_count,
-            "duplicate_terms_count": duplicate_terms_count,
-            "node_types_count": drupal_node_types_count,
-            "node_types": drupal_node_types,
-            "terms_exceeded_char_count": terms_exceeded_char_count,
-            "duplicate_aliases_count": duplicate_aliases_count,
-            "node_count_by_type": drupal_node_count_by_type
-        }
+            # Look for common problems
+            duplicate_terms_count = len(database.get_drupal_duplicate_term_names())
+            terms_exceeded_char_count = len(database.get_terms_exceeded_charlength())
+            duplicate_aliases_count = len(database.get_duplicate_aliases())
+
+            results = {
+                "sitename": drupal_sitename,
+                "version": drupal_version,
+                "posts_count": drupal_posts_count,
+                "terms_count": drupal_terms_count,
+                "duplicate_terms_count": duplicate_terms_count,
+                "node_types_count": drupal_node_types_count,
+                "node_types": drupal_node_types,
+                "terms_exceeded_char_count": terms_exceeded_char_count,
+                "duplicate_aliases_count": duplicate_aliases_count,
+                "node_count_by_type": drupal_node_count_by_type
+            }
+        else:
+            print """
+Some required tables are missing. Please check your source dump file exported completely.
+"""
     else:
         print "No database connection"
     return results
@@ -77,24 +84,35 @@ def check_tables(database):
     """Check if the required tables are present.
 
     Args:
-        database: An open connection to the Drupal database.    
+        database: An open connection to the Drupal database.
+
+    Returns:
+        boolean: True if all required tables are present, False otherwise.
     """
-    print "Checking tables..."
+    all_tables_present = True
 
     tables = [
+        'comments',
         'node',
+        'node_revisions',
         'node_type',
         'system',
         'term_data',
-        'url_alias'
+        'term_node',
+        'url_alias',
+        'users',
+        'users_roles',
+        'variable'
     ]
 
     for table in tables:
         count = database.get_table_count(table)
         if count > 0:
-            print "{} exits".format(table)
+            print "...{} table exists".format(table)
         else:
-            print "{} does not exist".format(table)
+            print "...{} table does not exist".format(table)
+            all_tables_present = False
+    return all_tables_present
 
 
 def reset(database):
@@ -145,7 +163,7 @@ def run_fix(database):
     Args:
         database: An open connection to the Drupal database.
     """
-    print "This process will alter your database"
+    print "This process will alter your database {}".format(database.get_database())
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
         if database.connected():
@@ -173,6 +191,7 @@ def run_sql_script(database, filename):
         filename: Filename with full path to the script.
     """
     if os.path.isfile(filename):
+        print "Executing script: {}".format(filename)
         print "You are about to run a script that may alter your database"
         answer = cli.query_yes_no("Are you sure you want to continue?", "no")
         if answer:
@@ -192,6 +211,7 @@ def migrate(database):
     Args:
         database: An open connection to the Drupal database.
     """
+    print "Using migration script: {}".format(settings.get_migration_script())
     print "The migration process will alter your database"
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
@@ -246,7 +266,8 @@ def process_action(action, options):
         if action in ['analyse', 'analyze']:
             cli.print_diagnostics_header()
             diagnostics_results = run_diagnostics(database)
-            cli.print_diagnostics(diagnostics_results)
+            if diagnostics_results:
+                cli.print_diagnostics(diagnostics_results)
         elif action == 'fix':
             run_fix(database)
         elif action == 'migrate':

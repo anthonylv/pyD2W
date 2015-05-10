@@ -2,7 +2,7 @@
  * Drupal to WordPress database migration tool
  * by Another Cup of Coffee Limited
  *
- * Version 0.2
+ * Version 0.3
  *
  * This script is based on the Drupal to WordPress Migration tool
  * drupaltowordpress-d6w35 version 3 by Another Cup of Coffee Limited.
@@ -31,7 +31,10 @@
 
 
 /********************
- * Clear out WP tables and working tables..
+ * Clear out WP tables and working tables.
+ *
+ * You may need to run create_tables_wordpress3x.sql file
+ * during the first run to set up the necessary WordPress tables.
  */
 TRUNCATE TABLE acc_wp_comments;
 TRUNCATE TABLE acc_wp_links;
@@ -44,35 +47,106 @@ TRUNCATE TABLE acc_wp_users;
 DROP TABLE IF EXISTS acc_duplicates;
 DROP TABLE IF EXISTS acc_news_terms;
 DROP TABLE IF EXISTS acc_tags_terms;
-DROP TABLE IF EXISTS acc_wp_tags;
+DROP TABLE IF EXISTS acc_tags;
 DROP TABLE IF EXISTS acc_users_post_count;
 DROP TABLE IF EXISTS acc_users_comment_count;
 DROP TABLE IF EXISTS acc_users_with_content;
 DROP TABLE IF EXISTS acc_users_post_count;
-DROP TABLE IF EXISTS acc_wp_categories;
+DROP TABLE IF EXISTS acc_categories;
 DROP TABLE IF EXISTS acc_users_with_comments;
 /*
  * For some installations, we make changes to the wp_usermeta table
 TRUNCATE TABLE acc_wp_usermeta;
 */
 
+/********************
+ * Delete unwanted vocabularies and their associated terms.
+ */
+
+/* Delete unwanted vocabularies */
+/*
+ * Set the vids appropriate for your installation
+DELETE FROM drupaldb.vocabulary WHERE vid IN (5, 7, 8, 38, 40);
+*/
+
+/* Delete terms associated with unwanted vocabularies; keep 38.
+ * Sometimes you might want to keep some terms of unwated
+ * vocabularies to convert into WordPress tags
+ */
+/*
+ * Set the vids appropriate for your installation
+DELETE FROM drupaldb.term_data WHERE vid IN (5, 7, 8, 40);
+*/
+
+/********************
+ * Merge terms.
+ *
+ * You may want to merge terms. In this case, we are merging vid 38
+ * to the tag vocabulary terms (vid 2).
+ *
+ * We will need to deal with duplicates. For example, in the Drupal
+ * installation, 'term_a' could appear in both vid 2 and vid 38. This
+ * will cause a problem when exporting to WordPress since we can't have
+ * duplicate terms.
+ */
+
+/* Create working tables for tables both term groups.
+ * In this case, vid 38 is a vocabulary called 'News' and 
+ * vid 2 is a vocabulary called 'Tags'.
+ */
+/*
+CREATE TABLE drupaldb.acc_news_terms AS SELECT tid, vid, name FROM drupaldb.term_data WHERE vid=38;
+CREATE TABLE drupaldb.acc_tags_terms AS SELECT tid, vid, name FROM drupaldb.term_data WHERE vid=2;
+*/
+
+/* Create table from duplicates */
+/*
+CREATE TABLE drupaldb.acc_duplicates AS
+	SELECT t.tid tag_tid,
+		n.tid news_tid,
+		t.vid tag_vid,
+		n.vid news_vid,
+		t.name
+FROM drupaldb.acc_tags_terms AS t
+INNER JOIN (drupaldb.acc_news_terms AS n)
+ON n.name=t.name;
+*/
+
+/* Append string to News terms duplicates so they won't clash during migration.
+ * Here we used a fixed string but this won't work if you have more than two
+ * terms with the same name. Better to generate a unique number. For example, using
+ * the tid would make it unique since these are unique primary keys.
+ */
+/*
+UPDATE drupaldb.term_data 
+	SET name=CONCAT(name, '_01') 
+	WHERE tid IN (SELECT news_tid FROM drupaldb.acc_duplicates);
+*/
+
+/* Convert News terms to Tags */
+/*
+UPDATE drupaldb.term_data SET vid=2 WHERE vid=38;
+*/
 
 
 /********************
- * Create a table of tags.
+ * Create a working table for the tags.
  *
- * Exclude terms from vocabularies that we might later
- * convert into categories. See stage below where we create categories 
- * and sub-categories.
  */
-CREATE TABLE acc_wp_tags AS
+CREATE TABLE acc_tags AS
 	SELECT 
 		tid,
 		vid,
 		name 
 	FROM term_data;
+	/*
+	* We may need to exclude terms from vocabularies that we might later
+    * convert into categories. See stage below where we create categories 
+    * and sub-categories.
+    *
+	WHERE vid NOT IN (37, 36, 35);	
+    */
 
-	
 /********************
  * Create the tags in the WordPress database
  */
@@ -95,7 +169,7 @@ REPLACE INTO acc_wp_terms (term_id, name, slug, term_group)
 		REPLACE(LOWER(d.name), ' ', '_'),
 		d.vid 
 	FROM term_data d WHERE d.tid IN (
-		SELECT t.tid FROM acc_wp_tags t
+		SELECT t.tid FROM acc_tags t
 		);
 
 /* Convert these Drupal terms into tags */
@@ -112,22 +186,41 @@ REPLACE INTO acc_wp_term_taxonomy (
 		d.description 'description',
 		0 /* In this case, we don't give tags a parent */ 
 	FROM term_data d
-	WHERE d.tid IN (SELECT t.tid FROM acc_wp_tags t);
+	WHERE d.tid IN (SELECT t.tid FROM acc_tags t);
 
 
 /********************
  * Create the categories and sub-categories in the WordPress database.
- */
-/* Add terms associated with a Drupal vocabulary into WordPress.
  *
+ * First create the categories. We can do this by:
+ * (1) supplying them in the form of a acc_categories table;
+ * (2) using terms in Drupal vocabularies;
+ * (3) using the vocabularies themselves.
+ *
+ * This is the working table for categories
  */
-
-CREATE TABLE acc_wp_categories AS
+CREATE TABLE acc_categories AS
 	SELECT 
 		tid,
 		vid,
 		name 
-	FROM term_data;
+	FROM acc_categories_from_client;
+    /* 
+     * acc_categories_from_client table should contain the list of categories.
+     *
+     * Alternatively, convert the vocabularies into categories as below.
+     *
+     * Exclude terms from vocabularies that we will later convert into
+     * categories. See stage below where we create categories 
+     * and sub-categories.
+     *
+     * Set the vids appropriate for your installation.
+     *
+     * Note that in this example, these are the same vids that we
+     * excluded from the tag table above.     
+	FROM term_data 
+	WHERE vid NOT IN (37, 36, 35);
+    */
 	
 	
 REPLACE INTO acc_wp_terms (term_id, name, slug, term_group) 
@@ -136,11 +229,24 @@ REPLACE INTO acc_wp_terms (term_id, name, slug, term_group)
 		d.name,
 		REPLACE(LOWER(d.name), ' ', '_'),
 		d.vid 
-	FROM term_data d WHERE d.tid IN (
-			SELECT t.tid FROM acc_wp_categories t
+	FROM term_data d
+    /*
+     * Select source for the categories
+     * In this case, we're using the acc_categories working table
+     */
+	WHERE d.tid IN (
+			SELECT t.tid FROM acc_categories t
 			);
-	
-/* Convert these Drupal terms into sub-categories by setting parent */
+    /* 
+     * Alternatively, if we're converting terms in some vocabularies
+     * into categories, use the folloging by including vids previously
+     * excluded from the tag table above.
+     *
+     * Set the vids appropriate for your installation 
+	WHERE d.vid IN (37, 36, 35);
+    */
+
+/* Convert these Drupal terms into categories */
 REPLACE INTO acc_wp_term_taxonomy (
 		term_taxonomy_id,
 		term_id,
@@ -154,8 +260,88 @@ REPLACE INTO acc_wp_term_taxonomy (
 		d.description 'description',
 		0 /* In this case, we don't give tags a parent */
 	FROM term_data d
-	WHERE d.tid IN (SELECT t.tid FROM acc_wp_categories t);
-	
+	WHERE d.tid IN (SELECT t.tid FROM acc_categories t);
+/* Uncomment to include vids previously excluded
+ * from the tag table above
+ * Set the vids appropriate for your installation 
+	WHERE d.vid IN (37, 36, 35);
+ */
+
+/* Convert these Drupal terms into sub-categories by setting parent */
+/*
+REPLACE INTO wordpressdb.wp_term_taxonomy (
+		term_taxonomy_id,
+		term_id,
+		taxonomy,
+		description,
+		parent)
+	SELECT DISTINCT 
+		d.tid,
+		d.tid 'term_id',
+		'category',
+		d.description 'description',
+		d.vid
+	FROM drupaldb.term_data d
+* Set the vids appropriate for your installation	
+	WHERE d.vid IN (37, 36, 35);
+*/
+
+/* Add vocabularies to the WordPress terms table.
+ *
+ * No need to set term_id as vocabularies are not
+ * directly associated with posts
+ */
+/*
+INSERT INTO wordpressdb.wp_terms (name, slug, term_group) 
+	SELECT DISTINCT 
+		v.name,
+		REPLACE(LOWER(v.name), ' ', '_'),
+		v.vid 
+	FROM drupaldb.vocabulary v
+* Set the vids appropriate for your installation	
+	WHERE vid IN (37, 36, 35);
+*/
+
+/* Insert Drupal vocabularies as WordPress categories */
+/*
+INSERT INTO wordpressdb.wp_term_taxonomy (		
+		term_id,
+		taxonomy,
+		description,
+		parent,
+		count)
+	SELECT DISTINCT 
+		v.vid,
+		'category', // This string makes them WordPress categories
+		v.description,
+		v.vid,
+		0
+	FROM drupaldb.vocabulary v
+* Set the vids appropriate for your installation	
+	WHERE vid IN (37, 36, 35);
+*/
+
+/* Update term groups and parents.
+ *
+ * Before continuing with this step, we need to manually inspect the table for the 
+ * term_id for the parents inserted above. In this case, vids 37, 36, 35 were inserted
+ * as into the wp_term_taxonomy table as term_ids 7517, 7518 and 7519. We will use them
+ * as the parents for their respective terms. i.e. terms that formerly belonged 
+ * to the Drupal vocabulary ID 37 would now belong to the WordPress parent category 7519.
+ */
+/*
+UPDATE wordpressdb.wp_terms SET term_group=7519 WHERE term_group=37;
+UPDATE wordpressdb.wp_terms SET term_group=7518 WHERE term_group=36;
+UPDATE wordpressdb.wp_terms SET term_group=7517 WHERE term_group=35;
+
+UPDATE wordpressdb.wp_term_taxonomy SET parent=7519 WHERE parent=37;
+UPDATE wordpressdb.wp_term_taxonomy SET parent=7518 WHERE parent=36;
+UPDATE wordpressdb.wp_term_taxonomy SET parent=7517 WHERE parent=35;
+
+UPDATE wordpressdb.wp_term_taxonomy SET term_id=7519 WHERE term_taxonomy_id=7519;
+UPDATE wordpressdb.wp_term_taxonomy SET term_id=7518 WHERE term_taxonomy_id=7518;
+UPDATE wordpressdb.wp_term_taxonomy SET term_id=7517 WHERE term_taxonomy_id=7517;
+*/
 
 /********************
  * Re-insert the Uncategorized term replaced previously.
@@ -494,7 +680,16 @@ CREATE TABLE acc_redirects AS
 	FROM node n
 	INNER JOIN node_revisions r USING(vid)
 	LEFT OUTER JOIN url_alias a
-		ON a.src = CONCAT('node/', n.nid);
+		ON a.src = CONCAT('node/', n.nid)
+		WHERE n.type IN (
+        		* List the post types we migrated earlier *
+        			'page',
+        			'story',
+        			'blog',
+        			'video1',
+        			'forum',
+        			'comment');
+		
 */	
 			
 			

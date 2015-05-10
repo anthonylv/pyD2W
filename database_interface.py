@@ -53,6 +53,14 @@ class Database:
         if self._db_connection:
             connection_status = True
         return connection_status
+        
+    def get_database(self):
+        """Check if the selected database.
+
+        Returns:
+            string: Database name.
+        """        
+        return self._database
 
 
     def query(self, query, params=None):
@@ -128,17 +136,33 @@ class Database:
     def get_drupal_version(self):
         """Get the Drupal installation version.
         """
-        version = ""
+        version = "[Unknown version]"
         # Returns a tuple of dictionary objects
         result = self.query("SELECT info FROM system WHERE name='system'")
-        # We expect the 'info' dictionary object as the first item
-        system_row = result[0]
-        system_info = system_row['info']
-        # The system info in Drupal is stored as a serialized string
-        system_info_dict = unserialize(system_info)
-        version = system_info_dict['version']
+        if result:
+            # We expect the 'info' dictionary object as the first item
+            system_row = result[0]
+            system_info = system_row['info']
+            # The system info in Drupal is stored as a serialized string
+            system_info_dict = unserialize(system_info)
+            version = system_info_dict['version']
         return version
 
+
+    def get_drupal_sitename(self):
+        """Get the Drupal installation version.
+        """
+        sitename = "[Unknown sitename]"
+        # Returns a tuple of dictionary objects
+        
+        result = self.query("SELECT value FROM variable WHERE name='site_name';")    
+        # We expect the 'value' dictionary object as the first item
+        if result:
+            variable_row = result[0]
+            variable_info = variable_row['value']
+            # The variable info in Drupal is stored as a serialized string
+            sitename = unserialize(variable_info)
+        return sitename
 
     def get_drupal_posts(self):
         """Get all the nodes from the Drupal installation.
