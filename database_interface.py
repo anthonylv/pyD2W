@@ -1,8 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""Provide an interface to the CMS database.
+"""Provide an interface to the Drupal 6 CMS database.
 
 This module provides a wrapper to interfacing with the content management system database.
+Supports Drupal 6 only.
 """
 import MySQLdb as mdb
 import os

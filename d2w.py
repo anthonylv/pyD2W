@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Run utilites for a Drupal to WordPress migration.
 
@@ -91,7 +91,7 @@ def check_tables(database):
     """
     all_tables_present = True
 
-    tables = [
+    tables_d6 = [
         'comments',
         'node',
         'node_revisions',
@@ -104,6 +104,22 @@ def check_tables(database):
         'users_roles',
         'variable'
     ]
+    
+    tables_d7 = [
+        'comment',
+        'node',
+        'node_revision',
+        'node_type',
+        'system',
+        'taxonomy_term_data',
+        'taxonomy_index',
+        'url_alias',
+        'users',
+        'users_roles',
+        'variable'
+    ]    
+
+    tables = tables_d7
 
     for table in tables:
         count = database.get_table_count(table)
@@ -128,6 +144,7 @@ def reset(database):
     drupal_tables_setup_success = False
     wp_tables_setup_success = False
     if database.connected():
+        print "Cleaning up working tables..."
         database.cleanup_tables()
 
         drupal_setup_file = (os.path.dirname(
@@ -135,11 +152,13 @@ def reset(database):
         wordpress_setup_file = (os.path.dirname(
             os.path.realpath(__file__)) + settings.get_wordpress_setup_script())
         if os.path.isfile(drupal_setup_file):
+            print "Setting up Drupal content from source dump file..."
             drupal_tables_setup_success = database.execute_sql_file(drupal_setup_file)
         else:
-            print "Could not find a SQL script file to setup the WordPress tables"
+            print "Could not find a SQL script file to setup the Drupal tables"
 
         if os.path.isfile(wordpress_setup_file):
+            print "Setting up a fresh WordPress tables..."
             wp_tables_setup_success = database.execute_sql_file(wordpress_setup_file)
         else:
             print "Could not find a SQL script file to setup the WordPress tables"
