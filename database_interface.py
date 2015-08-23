@@ -39,9 +39,13 @@ class Database:
         self._database = database
 
         try:
-            self._db_connection = mdb.connect(host, user, password, database)
-        except:
-            print "Unable to connect to database"
+            if not database:
+                self._db_connection = mdb.connect(host, user, password, database)
+            else:
+                self._db_connection = mdb.connect(host, user, password)
+        except mdb.Error, ex:
+            print "Sorry there was an error {}: {}".format(ex[0], ex[1])
+            raise ex
 
 
     def connected(self):
@@ -81,7 +85,7 @@ class Database:
             except (mdb.OperationalError, mdb.ProgrammingError), e:
                 # Uncomment to show error number
                 # print "Check database for problems {}: {}".format(e[0], e[1])
-                print "Check database for problems: {}".format(e[1])
+                print "An exception occured when trying to run a query: {}".format(e[1])
                 cur.close()
         return results
 
@@ -360,6 +364,7 @@ class Database:
         doesn't seem to work with running a mysql script.
         """
         success = False
+        # TO DO: make pythonic - use exception
         if os.path.isfile(sql_file):
             print "Executing SQL file..."
             command = "mysql -u"+self._user+" -p"+self._password+" "+self._database+" < "+sql_file

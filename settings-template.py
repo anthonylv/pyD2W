@@ -6,7 +6,7 @@ Since we can't have constants, use getter functions to return settings.
 """
 
 def get_drupal_host():
-    return "127.0.0.1"
+    return ""
     
 def get_drupal_username():
     return ""
@@ -51,3 +51,10 @@ def get_migration_script():
     The standard migration script may not work on all Drupal configurations.
     """
     return "/sql/migration_standard.sql"
+    
+def get_default_project_path():
+    """Get default project path.
+
+    The directory where you'll store the project files for this migration.
+    """
+    return ""

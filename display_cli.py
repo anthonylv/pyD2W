@@ -7,6 +7,7 @@ This module handles display of pyD2W results to the command line.
 
 import sys
 from prettytable import PrettyTable
+import getpass
 
 
 def print_diagnostics_header():
@@ -139,3 +140,13 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+def ask_credentials():
+    """Ask for username and password credentials.
+    """
+    user = raw_input("Username: ")
+    passwd = getpass.getpass("Password for " + user + ": ")
+
+    return (user, passwd)
+    
+    
