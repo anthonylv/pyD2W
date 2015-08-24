@@ -81,7 +81,7 @@ def print_usage():
     For the usage format, see http://en.wikipedia.org/wiki/Usage_message.
     """
     print """\
-Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
 
 Options:
 -a act, --action act
@@ -98,7 +98,6 @@ Options:
 
 Actions:
 analyse     : Analyse the Drupal database
-fix         : Try to fix database problems
 migrate     : Run the migration script
 reset       : Reset the tables into a clean state ready for another migration pass
 sqlscript   : Run the specified MySQL script file

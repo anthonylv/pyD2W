@@ -32,17 +32,20 @@ class Database:
     _database = ""
 
 
-    def __init__(self, host, user, password, database):
+    def __init__(self, host, user, password, database=None):
         self._host = host
         self._user = user
         self._password = password
         self._database = database
 
         try:
-            if not database:
+            if database:
                 self._db_connection = mdb.connect(host, user, password, database)
             else:
                 self._db_connection = mdb.connect(host, user, password)
+        except mdb.OperationalError, ex:
+            print "OperationalError on the database: {}".format(ex[1])            
+            raise ex
         except mdb.Error, ex:
             print "Sorry there was an error {}: {}".format(ex[0], ex[1])
             raise ex

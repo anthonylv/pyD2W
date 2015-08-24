@@ -4,7 +4,7 @@
 
 This module is a helper utility to migrate a Drupal site to WordPress.
 
-Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
 
 Options:
 -a act, --action act
@@ -21,7 +21,6 @@ Options:
 
 Actions:
 analyse     : Analyse the Drupal database
-fix         : Try to fix database problems
 migrate     : Run the migration script
 reset       : Reset the tables into a clean state ready for another migration pass
 sqlscript   : Run the specified MySQL script file
@@ -29,9 +28,10 @@ sqlscript   : Run the specified MySQL script file
 
 import sys, getopt, os
 import display_cli as cli
-import database_processor as processor
+import prepare, migrate, deploy
 import settings as settings
 from database_interface import Database
+from MySQLdb import OperationalError
 
 def run_diagnostics(database):
     """ Show Drupal database analysis but don't alter any Drupal CMS tables.
@@ -41,13 +41,13 @@ def run_diagnostics(database):
     """
     results = {}
     if database.connected():
+        drupal_version = database.get_drupal_version()
         print "Checking tables..."
-        all_tables_present = check_tables(database)
+        all_tables_present = check_tables(database, float(drupal_version))
 
         if all_tables_present:
             # General analysis of Drupal database properties
-            drupal_sitename = database.get_drupal_sitename()
-            drupal_version = database.get_drupal_version()
+            drupal_sitename = database.get_drupal_sitename()            
             drupal_posts_count = len(database.get_drupal_posts())
             drupal_terms_count = len(database.get_drupal_terms())
             drupal_node_types = database.get_drupal_node_types()
@@ -80,7 +80,7 @@ Some required tables are missing. Please check your source dump file exported co
     return results
 
 
-def check_tables(database):
+def check_tables(database, drupal_version):
     """Check if the required tables are present.
 
     Args:
@@ -90,7 +90,7 @@ def check_tables(database):
         boolean: True if all required tables are present, False otherwise.
     """
     all_tables_present = True
-
+    
     tables_d6 = [
         'comments',
         'node',
@@ -119,7 +119,10 @@ def check_tables(database):
         'variable'
     ]    
 
-    tables = tables_d7
+    if drupal_version < 7.0:
+        tables = tables_d6
+    else:
+        tables = tables_d7
 
     for table in tables:
         count = database.get_table_count(table)
@@ -176,32 +179,6 @@ def reset(database):
         print "Could not create WordPress export tables"
 
 
-def run_fix(database):
-    """Try to fix any issues that would cause the migration to fail.
-
-    Args:
-        database: An open connection to the Drupal database.
-    """
-    print "This process will alter your database {}".format(database.get_database())
-    answer = cli.query_yes_no("Are you sure you want to continue?", "no")
-    if answer:
-        if database.connected():
-            # Warning: this may push the name length past WordPress' 200 char limit
-            terms_with_duplicate_names = database.get_drupal_duplicate_terms()
-            fixed_term_names = processor.process_duplicate_term_names(
-                terms_with_duplicate_names)
-            for term in fixed_term_names:
-                database.update_processed_term_name(term["tid"], term["name"])
-            # Warning: this may undo duplicates fix if the term was close to the 200 char limit
-            database.update_term_name_length()
-            database.uniquify_url_aliases()
-            print "Fix complete"
-        else:
-            print "No database connection"
-    else:
-        print "Fix process aborted"
-
-
 def run_sql_script(database, filename):
     """Run a specified mySQL script.
 
@@ -224,13 +201,48 @@ def run_sql_script(database, filename):
         print "No script file found at: "+filename
 
 
-def migrate(database):
+def process_migration(database):
+    try:
+        prepare.prepare_migration(database)
+    except Exception as ex:
+        print "Could not prepare the database. Aborting."
+        template = "A {0} exception occured:\n{1!r}"
+        message = template.format(type(ex).__name__, ex.args)
+        print message        
+        sys.exit(1)
+
+    if check_migration_prerequisites(database):
+        try:
+            migrate.run_migration(database)
+        except Exception as ex:
+            print "Could not run the migration. Aborting."
+            template = "A {0} exception occured:\n{1!r}"
+            message = template.format(type(ex).__name__, ex.args)
+            print message        
+            sys.exit(1)
+    else:
+        print "Migration was because it did not meet the prerequistes for success."
+    
+    try:
+        deploy.deploy_database(database)
+    except Exception as ex:
+        print "Could not deploy the database. Aborting."
+        template = "A {0} exception occured:\n{1!r}"
+        message = template.format(type(ex).__name__, ex.args)
+        print message        
+        sys.exit(1)
+
+
+def check_migration_prerequisites(database):
     """Run the migration script.
 
     Args:
         database: An open connection to the Drupal database.
+        
+    Returns:
+        True if OK to proceed; False if migration should be aborted.
     """
-    print "Using migration script: {}".format(settings.get_migration_script())
+    success = False
     print "The migration process will alter your database"
     answer = cli.query_yes_no("Are you sure you want to continue?", "no")
     if answer:
@@ -244,20 +256,15 @@ def migrate(database):
                     terms_exceeded_char_count > 0 or
                     duplicate_aliases_count > 0):
                 print "There are problems that must be fixed before migrating."
-                run_fix(database)
                 print "Please re-run '-a migrate' to continue with the migration."
             else:
-                standard_migration_file = (os.path.dirname(
-                    os.path.realpath(__file__)) + settings.get_migration_script())
-                if os.path.isfile(standard_migration_file):
-                    database.execute_sql_file(standard_migration_file)
-                else:
-                    print "Could not find the migration script at "+standard_migration_file
+                print "OK to proceed with migration"
+                success = True
         else:
             print "No database connection"
     else:
-        print "Migration aborted"
-
+        print "Migration cancelled"
+    return success
 
 def process_action(action, options):
     """Process the command line options.
@@ -273,37 +280,38 @@ def process_action(action, options):
     else:
         selected_database = settings.get_drupal_database()
 
-    database = Database(
-        settings.get_drupal_host(),
-        settings.get_drupal_username(),
-        settings.get_drupal_password(),
-        selected_database
-    )
-
-    if database.connected():
-        # Process command line options and arguments
-        if action in ['analyse', 'analyze']:
-            cli.print_diagnostics_header()
-            diagnostics_results = run_diagnostics(database)
-            if diagnostics_results:
-                cli.print_diagnostics(diagnostics_results)
-        elif action == 'fix':
-            run_fix(database)
-        elif action == 'migrate':
-            migrate(database)
-        elif action == 'sqlscript':
-            # Has the user specified a sql script?
-            if 'script_option' in options:
-                run_sql_script(database, options['script_option'])
-            else:
-                print "You need to provide a path to the script."
-                cli.print_usage()
-        elif action == "reset":
-            reset(database)
+        try:
+            database = Database(
+                settings.get_drupal_host(),
+                settings.get_drupal_username(),
+                settings.get_drupal_password(),
+                selected_database
+            )
+        except OperationalError:
+            print "Could not access the database. Aborting database creation."
         else:
-            cli.print_usage()
-    else:
-        print "No database connection"
+            if database.connected():
+                # Process command line options and arguments
+                if action in ['analyse', 'analyze']:
+                    cli.print_diagnostics_header()
+                    diagnostics_results = run_diagnostics(database)
+                    if diagnostics_results:
+                        cli.print_diagnostics(diagnostics_results)
+                elif action == 'migrate':
+                    process_migration(database)
+                elif action == 'sqlscript':
+                    # Has the user specified a sql script?
+                    if 'script_option' in options:
+                        run_sql_script(database, options['script_option'])
+                    else:
+                        print "You need to provide a path to the script."
+                        cli.print_usage()
+                elif action == "reset":
+                    reset(database)
+                else:
+                    cli.print_usage()
+            else:
+                print "No database connection"
 
 def main(argv):
     """Process the user's commands.

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Set up a Drupal to WordPress migration project.
+
+Sets a Drupal to WordPress migration project by creating
+project file folders and working databases. 
 """
 
 import sys, getopt, os
@@ -42,7 +45,7 @@ def run_setup(path):
         create_directory(os.path.join(path, "Exports"))
         create_directory(os.path.join(path, "Specifications"))
         create_directory(os.path.join(path, "SQL"))
-        create_directory(os.path.join(path, "Testing"))
+        create_directory(os.path.join(path, "Custom"))
     else:
         print "Project setup aborted"
         
@@ -102,8 +105,7 @@ def create_databases():
         database = Database(
             drupal_host,
             admin_user,
-            admin_password,
-            drupal_db
+            admin_password
         )
     except AttributeError:
         print "Settings file is missing database information."
