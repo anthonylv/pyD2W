@@ -7,6 +7,18 @@ This module handles display of pyD2W results to the command line.
 
 import sys
 from prettytable import PrettyTable
+import getpass
+
+
+def print_diagnostics_header():
+    """Print the diagnostic header to the command line.
+
+    Print it separately from the diagnostic results in case some queries
+    cause execptions. Example: if tables or columns don't exist.
+    """
+    print "\n=================================================="
+    print "Starting Drupal To WordPress diagnostics"
+    print "=================================================="
 
 
 def print_diagnostics(diagnostic_results):
@@ -15,6 +27,9 @@ def print_diagnostics(diagnostic_results):
     Args:
         diagnostic_results (dictionary): A dictionary containing the results.
     """
+
+    sitename = diagnostic_results["sitename"]    
+    version = diagnostic_results["version"]
     posts_count = diagnostic_results["posts_count"]
     terms_count = diagnostic_results["terms_count"]
     duplicate_terms_count = diagnostic_results["duplicate_terms_count"]
@@ -24,10 +39,8 @@ def print_diagnostics(diagnostic_results):
     node_count_by_type = diagnostic_results["node_count_by_type"]
     node_types = diagnostic_results["node_types"]
 
-    print "\n=================================================="
-    print "Starting Drupal To WordPress diagnostics"
-    print "==================================================\n"
-
+    print "{} runs Drupal version: {}".format(sitename, version)
+    
     # Print Properties Table
     table_properties = PrettyTable(["Property", "Found in Drupal"])
     table_properties.align["Property"] = "l"
@@ -68,7 +81,7 @@ def print_usage():
     For the usage format, see http://en.wikipedia.org/wiki/Usage_message.
     """
     print """\
-Usage: drupaltowordpress.py [-h --help | -a=analyse|fix|reset|sqlscript] [-d=database_name] [-s=script_path]
+Usage: drupaltowordpress.py [-h --help | -a=analyse|migrate|reset|sqlscript] [-d=database_name] [-s=script_path]
 
 Options:
 -a act, --action act
@@ -85,9 +98,9 @@ Options:
 
 Actions:
 analyse     : Analyse the Drupal database
-fix         : Try to fix database problems
-reset       : Reset the tables into a clean state ready for another migration pass
 migrate     : Run the migration script
+reset       : Reset the tables into a clean state ready for another migration pass
+sqlscript   : Run the specified MySQL script file
 
 """
 
@@ -126,3 +139,13 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+def ask_credentials():
+    """Ask for username and password credentials.
+    """
+    user = raw_input("Username: ")
+    passwd = getpass.getpass("Password for " + user + ": ")
+
+    return (user, passwd)
+    
+    

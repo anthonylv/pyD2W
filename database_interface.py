@@ -1,11 +1,13 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""Provide an interface to the CMS database.
+"""Provide an interface to the Drupal 6 CMS database.
 
 This module provides a wrapper to interfacing with the content management system database.
+Supports Drupal 6 only.
 """
 import MySQLdb as mdb
 import os
+from phpserialize import unserialize
 #import subprocess
 # Ensures cursors are closed upon completion of with block
 # See discussion at http://stackoverflow.com/questions/5669878/python-mysqldb-when-to-close-cursors
@@ -30,16 +32,23 @@ class Database:
     _database = ""
 
 
-    def __init__(self, host, user, password, database):
+    def __init__(self, host, user, password, database=None):
         self._host = host
         self._user = user
         self._password = password
         self._database = database
 
         try:
-            self._db_connection = mdb.connect(host, user, password, database)
-        except:
-            print "Unable to connect to database"
+            if database:
+                self._db_connection = mdb.connect(host, user, password, database)
+            else:
+                self._db_connection = mdb.connect(host, user, password)
+        except mdb.OperationalError, ex:
+            print "OperationalError on the database: {}".format(ex[1])            
+            raise ex
+        except mdb.Error, ex:
+            print "Sorry there was an error {}: {}".format(ex[0], ex[1])
+            raise ex
 
 
     def connected(self):
@@ -52,6 +61,14 @@ class Database:
         if self._db_connection:
             connection_status = True
         return connection_status
+        
+    def get_database(self):
+        """Check if the selected database.
+
+        Returns:
+            string: Database name.
+        """        
+        return self._database
 
 
     def query(self, query, params=None):
@@ -61,12 +78,18 @@ class Database:
             query (string): MySQL query string.
 
         Returns:
-            results: Results of the query.
+            results: Results of the query as a list of tuples.
         """
         results = None
         with closing(self._db_connection.cursor(mdb.cursors.DictCursor)) as cur:
-            cur.execute(query)
-            results = cur.fetchall()
+            try:
+                cur.execute(query)
+                results = cur.fetchall()
+            except (mdb.OperationalError, mdb.ProgrammingError), e:
+                # Uncomment to show error number
+                # print "Check database for problems {}: {}".format(e[0], e[1])
+                print "An exception occured when trying to run a query: {}".format(e[1])
+                cur.close()
         return results
 
 
@@ -87,39 +110,109 @@ class Database:
             self._db_connection.commit()
         except mdb.Error, e:
             success = False
-            print "Error {}: {}".format(e[0], e[1])
+            print "Sorry there was an error {}: {}".format(e[0], e[1])
             print "Unable to insert data; rollback called"
             self._db_connection.rollback()
             cur.close()
         return success
 
 
+    def get_table_count(self, table):
+        """Query to check if the table exists in the database.
+
+        Args:
+            table (string): The Drupal table to check.
+
+        Returns:
+            long: table count
+        """
+        count = 0
+        query = "SELECT count(*) FROM information_schema.tables \
+                WHERE table_schema = '{0}' AND table_name = '{1}' LIMIT 1;".format(
+                    self._database,
+                    table
+                    )
+
+        result = self.query(query)
+        dict_item = result[0]
+        count = dict_item['count(*)']
+        if (count > 1 ):
+            print "Warning: expected only one {0} table. Found {1}".format(table, count)
+        return count
+        
+
+    def get_drupal_version(self):
+        """Get the Drupal installation version.
+        """
+        version = "[Unknown version]"
+        # Returns a tuple of dictionary objects
+        result = self.query("SELECT info FROM system WHERE name='system'")
+        if result:
+            # We expect the 'info' dictionary object as the first item
+            system_row = result[0]
+            system_info = system_row['info']
+            # The system info in Drupal is stored as a serialized string
+            system_info_dict = unserialize(system_info)
+            version = system_info_dict['version']
+        return version
+
+
+    def get_drupal_sitename(self):
+        """Get the Drupal installation version.
+        """
+        sitename = "[Unknown sitename]"
+        # Returns a tuple of dictionary objects
+        
+        result = self.query("SELECT value FROM variable WHERE name='site_name';")    
+        # We expect the 'value' dictionary object as the first item
+        if result:
+            variable_row = result[0]
+            variable_info = variable_row['value']
+            # The variable info in Drupal is stored as a serialized string
+            sitename = unserialize(variable_info)
+        return sitename
+
     def get_drupal_posts(self):
         """Get all the nodes from the Drupal installation.
         """
-        return self.query("SELECT DISTINCT nid, FROM_UNIXTIME(created) post_date, title, type \
+        posts = self.query("SELECT DISTINCT nid, FROM_UNIXTIME(created) post_date, title, type \
                             FROM node")
+        if not posts:
+            posts = ()
+        return posts
 
 
     def get_drupal_terms(self):
         """Get all the terms from the Drupal installation.
         """
-        return self.query("SELECT DISTINCT tid, name, REPLACE(LOWER(name), ' ', '_') slug, 0 \
+        terms = self.query("SELECT DISTINCT tid, name, REPLACE(LOWER(name), ' ', '_') slug, 0 \
                             FROM term_data WHERE (1);")
+        if not terms:
+            terms = ()
+        return terms
 
 
     def get_drupal_node_types(self):
         """Get the node types configured on the Drupal installation.
         """
-        return self.query("SELECT DISTINCT type, name, description FROM node_type n ")
+        node_types = self.query("SELECT DISTINCT type, name, description FROM node_type n ")
+
+        if not node_types:
+            node_types = ()
+        return node_types
 
 
     def get_drupal_node_count_by_type(self):
         """Get the number of nodes for each Drupal content type."""
-        return self.query("SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
-            "FROM node " \
-            "INNER JOIN node_type ON node.type = node_type.type " \
-            "GROUP BY node_type.type;")
+
+        node_count = self.query(
+            "SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
+                "FROM node " \
+                "INNER JOIN node_type ON node.type = node_type.type " \
+                "GROUP BY node_type.type;")
+        if not node_count:
+            node_count = ()
+        return node_count
 
 
     def get_drupal_duplicate_term_names(self):
@@ -129,7 +222,12 @@ class Database:
         Get aggregate of terms with duplicate names; we don't want each individual term
         entry with a duplicate name
         """
-        return self.query("SELECT tid, name, COUNT(*) c FROM term_data GROUP BY name HAVING c > 1")
+        term_names = self.query(
+            "SELECT tid, name, COUNT(*) c FROM term_data GROUP BY name HAVING c > 1"
+        )
+        if not term_names:
+            term_names = ()
+        return term_names
 
 
     def get_drupal_duplicate_terms(self):
@@ -138,11 +236,14 @@ class Database:
         This is different from get_drupal_duplicate_term_names() because
         it gets the aggregate of terms with duplicate names.
         """
-        return self.query("SELECT term_data.tid, term_data.name \
+        duplicate_terms = self.query("SELECT term_data.tid, term_data.name \
                             FROM term_data \
                             INNER JOIN ( SELECT name FROM term_data \
                             GROUP BY name HAVING COUNT(name) >1 ) temp \
                             ON term_data.name=temp.name")
+        if not duplicate_terms:
+            duplicate_terms = ()
+        return duplicate_terms
 
 
     def get_terms_exceeded_charlength(self):
@@ -150,7 +251,10 @@ class Database:
 
         WordPress term name field is set 200 chars but Drupal's is term name is 255 chars.
         """
-        return self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
+        terms = self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
+        if not terms:
+            terms = ()
+        return terms
 
 
     def get_duplicate_aliases(self):
@@ -170,7 +274,12 @@ class Database:
 
         To avoid this error, we need to check for duplicate aliases
         """
-        return self.query("SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;")
+        aliases = self.query(
+            "SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;"
+        )
+        if not aliases:
+            aliases = ()
+        return aliases
 
 
     def uniquify_url_aliases(self):
@@ -258,6 +367,7 @@ class Database:
         doesn't seem to work with running a mysql script.
         """
         success = False
+        # TO DO: make pythonic - use exception
         if os.path.isfile(sql_file):
             print "Executing SQL file..."
             command = "mysql -u"+self._user+" -p"+self._password+" "+self._database+" < "+sql_file
