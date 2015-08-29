@@ -10,14 +10,14 @@ from prettytable import PrettyTable
 import getpass
 
 
-def print_diagnostics_header():
+def print_header(header_text):
     """Print the diagnostic header to the command line.
 
     Print it separately from the diagnostic results in case some queries
     cause execptions. Example: if tables or columns don't exist.
     """
     print "\n=================================================="
-    print "Starting Drupal To WordPress diagnostics"
+    print str(header_text)
     print "=================================================="
 
 
@@ -144,7 +144,11 @@ def ask_credentials():
     """Ask for username and password credentials.
     """
     user = raw_input("Username: ")
-    passwd = getpass.getpass("Password for " + user + ": ")
+    if user:
+        passwd = getpass.getpass("Password for " + user + ": ")
+    else:
+        user = None
+        passwd = None
 
     return (user, passwd)
     
