@@ -59,40 +59,38 @@ def run_diagnostics(database=None):
     else:
         drupal_version = dbconn.get_drupal_version()
         
-        try:
+        if drupal_version:
             print "Checking tables..."            
             all_tables_present = check_tables(dbconn, float(drupal_version))
-        except (ValueError, TypeError):
-            print ("Some required tables are missing. "
-                "Please check your source dump file exported completely."
-                )
         else:
-            if all_tables_present:
-                # General analysis of Drupal database properties
-                drupal_sitename = dbconn.get_drupal_sitename()            
-                drupal_posts_count = len(dbconn.get_drupal_posts())
-                drupal_terms_count = len(dbconn.get_drupal_terms())
-                drupal_node_types = dbconn.get_drupal_node_types()
-                drupal_node_types_count = len(drupal_node_types)
-                drupal_node_count_by_type = dbconn.get_drupal_node_count_by_type()
+            drupal_version = "Unknown"
+            print "Could not check tables since the Drupal version is unknown."
 
-                # Look for common problems
-                duplicate_terms_count = len(dbconn.get_drupal_duplicate_term_names())
-                terms_exceeded_char_count = len(dbconn.get_terms_exceeded_charlength())
-                duplicate_aliases_count = len(dbconn.get_duplicate_aliases())
+        # General analysis of Drupal database properties
+        drupal_sitename = dbconn.get_drupal_sitename()
+        drupal_posts_count = len(dbconn.get_drupal_posts())
+        drupal_terms_count = len(dbconn.get_drupal_terms())
+        drupal_node_types = dbconn.get_drupal_node_types()
+        drupal_node_types_count = len(drupal_node_types)
+        drupal_node_count_by_type = dbconn.get_drupal_node_count_by_type()
+        print "Looking for common problems"
+        # Look for common problems
+        duplicate_terms_count = len(dbconn.get_drupal_duplicate_term_names())
+        terms_exceeded_char_count = len(dbconn.get_terms_exceeded_charlength())
+        duplicate_aliases_count = len(dbconn.get_duplicate_aliases())
 
-                results = {
-                    "sitename": drupal_sitename,
-                    "version": drupal_version,
-                    "posts_count": drupal_posts_count,
-                    "terms_count": drupal_terms_count,
-                    "duplicate_terms_count": duplicate_terms_count,
-                    "node_types_count": drupal_node_types_count,
-                    "node_types": drupal_node_types,
-                    "terms_exceeded_char_count": terms_exceeded_char_count,
-                    "duplicate_aliases_count": duplicate_aliases_count,
-                    "node_count_by_type": drupal_node_count_by_type
-                }
+        results = {
+            "sitename": drupal_sitename,
+            "version": drupal_version,
+            "posts_count": drupal_posts_count,
+            "terms_count": drupal_terms_count,
+            "duplicate_terms_count": duplicate_terms_count,
+            "node_types_count": drupal_node_types_count,
+            "node_types": drupal_node_types,
+            "terms_exceeded_char_count": terms_exceeded_char_count,
+            "duplicate_aliases_count": duplicate_aliases_count,
+            "node_count_by_type": drupal_node_count_by_type
+        }
     return results
 
 
@@ -221,7 +219,7 @@ def process_migration(database=None):
     if continue_script:
         cli.print_header("Deploying to test environment")
         continue_script = deploy.deploy_database(dbconn, database)
-    
+
     if not continue_script:
         sys.exit(1)
 
@@ -236,6 +234,9 @@ def check_migration_prerequisites(dbconn, database=None):
         True if OK to proceed; False if migration should be aborted.
     """
     print "Checking migration prerequisites"
+    custom_sql_exists = False
+    custom_script_exists = False
+    problems_fixed = False
     success = False
     if dbconn.connected():
         diagnostic_results = run_diagnostics(database)
@@ -246,13 +247,32 @@ def check_migration_prerequisites(dbconn, database=None):
         if (duplicate_terms_count > 0 or
                 terms_exceeded_char_count > 0 or
                 duplicate_aliases_count > 0):
-            print "There are problems that must be fixed before migrating."
-            print "Please re-run '-a migrate' to continue with the migration."
+            print "There are problems that must be fixed before migrating"
+            print "Please re-run '-a migrate' to continue with the migration"
         else:
-            print "OK to proceed with migration"
-            success = True
+            print "Common migration problems fixed"
+            problems_fixed = True
     else:
         print "No database connection"
+
+    # Is there a miration script present?
+    custom_script_path = os.path.dirname(os.path.realpath(__file__))
+    custom_script = custom_script_path+os.sep+settings.get_migrate_script_filename()
+    custom_sql_path = settings.get_default_project_path()            
+    custom_sql = custom_sql_path+os.sep+settings.get_migrate_sql_filename()
+    if os.path.isfile(custom_sql):
+        custom_sql_exists = True
+    if os.path.isfile(custom_script):
+        custom_script_exists = True
+    if not (custom_sql_exists or custom_script_exists):
+        print "You need either an SQL or Python migration script present to run the migration"
+    # Only proceed with migration if problems have been fixed AND either
+    # SQL or Python migration script is present
+    success = problems_fixed and (custom_sql_exists or custom_script_exists)
+    if success:
+        print "OK to proceed with migration"
+    else:
+        print "Cannot proceed with migration"
     return success
 
 

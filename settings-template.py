@@ -43,10 +43,6 @@ def get_default_project_path():
     """
     return ""
 
-############################################################
-# Your migration SQL scripts
-# Paths should be relative to your project path
-############################################################
 def get_wordpress_setup_script():
     """Get SQL dumpfile used to setup fresh WordPress tables.
 

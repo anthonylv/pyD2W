@@ -167,8 +167,13 @@ class Database:
         """Get the Drupal installation version.
         """
         version = None
-        # Returns a tuple of dictionary objects
-        result = self.query("SELECT info FROM system WHERE name='system'")
+        result = None
+        try:
+            # Returns a tuple of dictionary objects
+            result = self.query("SELECT info FROM system WHERE name='system'")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get the version number. Perhaps your system table is missing."
+            
         if result:
             # We expect the 'info' dictionary object as the first item
             system_row = result[0]
@@ -183,9 +188,13 @@ class Database:
         """Get the Drupal installation version.
         """
         sitename = "[Unknown sitename]"
-        # Returns a tuple of dictionary objects
-        
-        result = self.query("SELECT value FROM variable WHERE name='site_name';")    
+        result = None
+        try:
+            # Returns a tuple of dictionary objects
+            result = self.query("SELECT value FROM variable WHERE name='site_name';")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get site name. Perhaps your variable table is missing."
+                        
         # We expect the 'value' dictionary object as the first item
         if result:
             variable_row = result[0]
@@ -197,8 +206,12 @@ class Database:
     def get_drupal_posts(self):
         """Get all the nodes from the Drupal installation.
         """
-        posts = self.query("SELECT DISTINCT nid, FROM_UNIXTIME(created) post_date, title, type \
+        posts = None
+        try:
+            posts = self.query("SELECT DISTINCT nid, FROM_UNIXTIME(created) post_date, title, type \
                             FROM node")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get posts. Perhaps your node table is missing."
         if not posts:
             posts = ()
         return posts
@@ -207,8 +220,13 @@ class Database:
     def get_drupal_terms(self):
         """Get all the terms from the Drupal installation.
         """
-        terms = self.query("SELECT DISTINCT tid, name, REPLACE(LOWER(name), ' ', '_') slug, 0 \
+        terms = None
+        try:
+            terms = self.query("SELECT DISTINCT tid, name, REPLACE(LOWER(name), ' ', '_') slug, 0 \
                             FROM term_data WHERE (1);")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get terms. Perhaps your term_data table is missing."
+
         if not terms:
             terms = ()
         return terms
@@ -217,7 +235,11 @@ class Database:
     def get_drupal_node_types(self):
         """Get the node types configured on the Drupal installation.
         """
-        node_types = self.query("SELECT DISTINCT type, name, description FROM node_type n ")
+        node_types = None
+        try:
+            node_types = self.query("SELECT DISTINCT type, name, description FROM node_type n ")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get node types. Perhaps your node_type table is missing."
 
         if not node_types:
             node_types = ()
@@ -227,11 +249,16 @@ class Database:
     def get_drupal_node_count_by_type(self):
         """Get the number of nodes for each Drupal content type."""
 
-        node_count = self.query(
-            "SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
-                "FROM node " \
-                "INNER JOIN node_type ON node.type = node_type.type " \
-                "GROUP BY node_type.type;")
+        node_count = None
+        try:
+            node_count = self.query(
+                "SELECT node_type.type, node_type.name, COUNT(node.nid) AS node_count " \
+                    "FROM node " \
+                    "INNER JOIN node_type ON node.type = node_type.type " \
+                    "GROUP BY node_type.type;")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get node count. Perhaps your node table is missing."
+                    
         if not node_count:
             node_count = ()
         return node_count
@@ -244,9 +271,14 @@ class Database:
         Get aggregate of terms with duplicate names; we don't want each individual term
         entry with a duplicate name
         """
-        term_names = self.query(
-            "SELECT tid, name, COUNT(*) c FROM term_data GROUP BY name HAVING c > 1"
-        )
+        term_names = None
+        try:
+            term_names = self.query(
+                "SELECT tid, name, COUNT(*) c FROM term_data GROUP BY name HAVING c > 1"
+            )
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get term names. Perhaps your term_data table is missing."
+            
         if not term_names:
             term_names = ()
         return term_names
@@ -258,12 +290,17 @@ class Database:
         This is different from get_drupal_duplicate_term_names() because
         it gets the aggregate of terms with duplicate names.
         """
-        print "Getting duplicate terms..."        
-        duplicate_terms = self.query("SELECT term_data.tid, term_data.name \
-                            FROM term_data \
-                            INNER JOIN ( SELECT name FROM term_data \
-                            GROUP BY name HAVING COUNT(name) >1 ) temp \
-                            ON term_data.name=temp.name")
+        print "Getting duplicate terms..."
+        duplicate_terms = None
+        try:
+            duplicate_terms = self.query("SELECT term_data.tid, term_data.name \
+                                FROM term_data \
+                                INNER JOIN ( SELECT name FROM term_data \
+                                GROUP BY name HAVING COUNT(name) >1 ) temp \
+                                ON term_data.name=temp.name")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get dupolicate terms. Perhaps your term_data table is missing."
+
         if not duplicate_terms:
             duplicate_terms = ()
         return duplicate_terms
@@ -274,7 +311,12 @@ class Database:
 
         WordPress term name field is set 200 chars but Drupal's is term name is 255 chars.
         """
-        terms = self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
+        terms = None
+        try:
+            terms = self.query("SELECT tid, name FROM term_data WHERE CHAR_LENGTH(name) > 200;")
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get terms. Perhaps your term_data table is missing."
+
         if not terms:
             terms = ()
         return terms
@@ -297,13 +339,18 @@ class Database:
 
         To avoid this error, we need to check for duplicate aliases
         """
-        aliases = self.query(
-            "SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;"
-        )
+        aliases = None
+        try:
+            aliases = self.query(
+                "SELECT pid, src, COUNT(*) c FROM url_alias GROUP BY src HAVING c > 1;"
+            )
+        except mdb.ProgrammingError as ex:
+            print "Couldn't get aliases. Perhaps your url_aliases table is missing."
+            
         if not aliases:
             aliases = ()
         return aliases
-
+        
 
     def execute_sql_file(self, sql_file, database=None):
         """Use mysql on the command line to execute a MySQL file.

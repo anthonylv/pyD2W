@@ -12,6 +12,7 @@ import settings
 from os.path import expanduser
 from database_interface import Database
 from MySQLdb import OperationalError
+from subprocess import check_call
 
 
 def print_usage():
@@ -47,9 +48,18 @@ def run_setup(path):
         create_directory(os.path.join(path, "SQL"))
 
         setup_databases()
+        show_instructions()
     else:
         print "Project setup aborted"
         
+def show_instructions():
+    print ("Setup is complete. "
+        "Remember to copy over the migration files into your project directory:\n"
+        "* prepare.sql\n"
+        "* migrate-xx.sql\n"
+        "* deploy.sql"
+    )
+
 
 def get_default_project_path():
     """Gets the default project path.
@@ -189,9 +199,6 @@ def create_working_database(dbconn, connection_details):
         dbconn.query("GRANT "+privs+" ON "+drupal_db+
             ".* TO \'"+user+"\'@\'"+host+
             "\' IDENTIFIED BY \'"+password+"\';")
-        dbconn.query("GRANT "+privs+" ON "+drupal_db+
-            "_clean.* TO \'"+user+"\'@\'"+host+
-            "\' IDENTIFIED BY \'"+password+"\';")
         dbconn.query("GRANT "+privs+" ON "+wordpress_db+
             ".* TO \'"+user+"\'@\'"+host+
             "\' IDENTIFIED BY \'"+password+"\';")
@@ -241,16 +248,8 @@ def cleanup_database(dbconn, connection_details):
     except OperationalError as ex:    
         print "OperationalError on the database: {}".format(ex[1])
         success = False
-        
-    try:
-        dbconn.query("DROP DATABASE IF EXISTS "+drupal_db+"_clean;")
-    except Warning as warn:
-        # In this case it's OK not to raise an exception on the warning
-        # The table may not exist on the first run of the migration
-        pass
-    except OperationalError as ex:    
-        print "OperationalError on the database: {}".format(ex[1])
-        success = False
+    else:
+        print "Dropped database {}".format(drupal_db)
         
     try:    
         dbconn.query("DROP DATABASE IF EXISTS "+wordpress_db+";")
@@ -261,6 +260,8 @@ def cleanup_database(dbconn, connection_details):
     except OperationalError as ex:    
         print "OperationalError on the database: {}".format(ex[1])
         success = False
+    else:
+        print "Dropped database {}".format(wordpress_db)
                 
     if success:
         print "...done"
@@ -288,11 +289,9 @@ def import_source_databases(dbconn, database):
     wp_tables_setup_success = False
     
     try:
-        project_path = get_default_project_path()
         drupal_db = settings.get_drupal_database()
-        
-        drupal_setup_file = (project_path + settings.get_drupal_setup_script())
-        wordpress_setup_file = (project_path + settings.get_wordpress_setup_script())
+        drupal_setup_file = settings.get_drupal_setup_script()
+        wordpress_setup_file = settings.get_wordpress_setup_script()
     except AttributeError:
         print "Settings file is missing database information."
 
@@ -301,23 +300,30 @@ def import_source_databases(dbconn, database):
             print "Setting up Drupal content from source dump file..."
             drupal_tables_setup_success = dbconn.execute_sql_file(drupal_setup_file, database)
         else:
-            print "Could not find a SQL script file to setup the Drupal tables"
+            # For large sites, the Drupal data will take a long time to import
+            # You might want to use another method to import the data
+            print ("Could not find a SQL script file to setup the Drupal tables.\n"
+                "Assuming that you will import the Drupal data separately")
+            drupal_tables_setup_success = True
+            
 
         if os.path.isfile(wordpress_setup_file):
             print "Setting up a fresh WordPress tables..."
             wp_tables_setup_success = dbconn.execute_sql_file(wordpress_setup_file, database)
         else:
             print "Could not find a SQL script file to setup the WordPress tables"
-    except MySQLdb.OperationalError:
+    except OperationalError:
         print "Could not access the database. Aborting database creation."        
         print "...failed"
+    except KeyboardInterrupt:
+        print "Aborted"
     else:
         print "...done"
 
     if drupal_tables_setup_success:
         print "Source Drupal tables imported"
     else:
-        print "Could not import srouce Drupal tables"
+        print "Could not import source Drupal tables"
 
     if wp_tables_setup_success:
         print "WordPress export tables were created"
@@ -345,8 +351,7 @@ def setup_requirements(dbconn, database=None):
     try:
         custom_script_path = os.path.dirname(os.path.realpath(__file__))
         custom_script = custom_script_path+os.sep+settings.get_setup_script_filename()
-        custom_sql_path = settings.get_default_project_path()            
-        custom_sql = custom_sql_path+os.sep+settings.get_setup_sql_filename()
+        custom_sql = os.sep+settings.get_setup_sql_filename()
     except AttributeError:
         print "Could not find custom setup script."
         setup = False            
@@ -362,7 +367,7 @@ def setup_requirements(dbconn, database=None):
 
         if os.path.isfile(custom_script):
             print "Execute custom setup script at {}".format(custom_script)
-            subprocess.check_call(["python", custom_script])
+            check_call(["python", custom_script])
         else:
             print "No custom setup scripts found {}".format(custom_script)
             
