@@ -60,37 +60,43 @@ def run_diagnostics(database=None):
         drupal_version = dbconn.get_drupal_version()
         
         if drupal_version:
-            print "Checking tables..."            
+            print "Checking tables..."
             all_tables_present = check_tables(dbconn, float(drupal_version))
         else:
             drupal_version = "Unknown"
             print "Could not check tables since the Drupal version is unknown."
 
-        # General analysis of Drupal database properties
-        drupal_sitename = dbconn.get_drupal_sitename()
-        drupal_posts_count = len(dbconn.get_drupal_posts())
-        drupal_terms_count = len(dbconn.get_drupal_terms())
-        drupal_node_types = dbconn.get_drupal_node_types()
-        drupal_node_types_count = len(drupal_node_types)
-        drupal_node_count_by_type = dbconn.get_drupal_node_count_by_type()
-        print "Looking for common problems"
-        # Look for common problems
-        duplicate_terms_count = len(dbconn.get_drupal_duplicate_term_names())
-        terms_exceeded_char_count = len(dbconn.get_terms_exceeded_charlength())
-        duplicate_aliases_count = len(dbconn.get_duplicate_aliases())
-
-        results = {
-            "sitename": drupal_sitename,
-            "version": drupal_version,
-            "posts_count": drupal_posts_count,
-            "terms_count": drupal_terms_count,
-            "duplicate_terms_count": duplicate_terms_count,
-            "node_types_count": drupal_node_types_count,
-            "node_types": drupal_node_types,
-            "terms_exceeded_char_count": terms_exceeded_char_count,
-            "duplicate_aliases_count": duplicate_aliases_count,
-            "node_count_by_type": drupal_node_count_by_type
-        }
+        try:
+            # General analysis of Drupal database properties
+            drupal_sitename = dbconn.get_drupal_sitename()
+            drupal_posts_count = len(dbconn.get_drupal_posts())
+            drupal_terms_count = len(dbconn.get_drupal_terms())
+            drupal_node_types = dbconn.get_drupal_node_types()
+            drupal_node_types_count = len(drupal_node_types)
+            drupal_node_count_by_type = dbconn.get_drupal_node_count_by_type()
+            print "Looking for common problems"
+            # Look for common problems
+            duplicate_terms_count = len(dbconn.get_drupal_duplicate_term_names())
+            terms_exceeded_char_count = len(dbconn.get_terms_exceeded_charlength())
+            duplicate_aliases_count = len(dbconn.get_duplicate_aliases())
+        except Exception as ex:
+            print (
+                "Could not run diagnostics. "
+                "Please use a database interface that supports Drupal version {}."
+            ).format(drupal_version)
+        else:
+            results = {
+                "sitename": drupal_sitename,
+                "version": drupal_version,
+                "posts_count": drupal_posts_count,
+                "terms_count": drupal_terms_count,
+                "duplicate_terms_count": duplicate_terms_count,
+                "node_types_count": drupal_node_types_count,
+                "node_types": drupal_node_types,
+                "terms_exceeded_char_count": terms_exceeded_char_count,
+                "duplicate_aliases_count": duplicate_aliases_count,
+                "node_count_by_type": drupal_node_count_by_type
+            }
     return results
 
 

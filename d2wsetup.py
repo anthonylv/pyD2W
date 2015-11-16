@@ -183,7 +183,7 @@ def create_working_database(dbconn, connection_details):
     password = str(connection_details["password"])
     drupal_db = str(connection_details["drupal_db"])
     wordpress_db = str(connection_details["wordpress_db"])
-    privs = "SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER, CREATE TEMPORARY TABLES"
+    privs = "SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES"
     
     print "Setting up working databases..."
     try:
