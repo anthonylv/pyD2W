@@ -4,15 +4,17 @@
 
 This module contains the logic to prepare the working database for
 a run through of the migration scripts.
+
+Support for Drupal 6
 """
 
 from MySQLdb import OperationalError
 from d2w import run_sql_script
 import os, subprocess
 import display_cli as cli
-import settings
 
-def prepare_migration(dbconn, database=None):
+
+def prepare_migration(settings, dbconn, database=None):
     """Prepare the working database.
 
     Args:
@@ -31,9 +33,8 @@ def prepare_migration(dbconn, database=None):
     if fixed:
         try:
             custom_script_path = os.path.dirname(os.path.realpath(__file__))
-            custom_script = custom_script_path+os.sep+settings.get_prepare_script_filename()
-            custom_sql_path = settings.get_default_project_path()            
-            custom_sql = custom_sql_path+os.sep+settings.get_prepare_sql_filename()
+            custom_script = custom_script_path+os.sep+settings['database']['get_prepare_script_filename']
+            custom_sql = settings['database']['prepare_sql_filename']
         except AttributeError:
             print "Could not find custom prepare script."
             prepared = False            

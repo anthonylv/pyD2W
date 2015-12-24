@@ -7,10 +7,8 @@ to the staging server
 """
 
 import os, subprocess
-import settings
 
-
-def deploy_database(dbconn, database=None):
+def deploy_database(settings, dbconn, database=None):
     """Deploy the database
 
     Args:
@@ -22,9 +20,8 @@ def deploy_database(dbconn, database=None):
 
     try:
         custom_script_path = os.path.dirname(os.path.realpath(__file__))
-        custom_script = custom_script_path+os.sep+settings.get_deploy_script_filename()
-        custom_sql_path = settings.get_default_project_path()            
-        custom_sql = custom_sql_path+os.sep+settings.get_deploy_sql_filename()
+        custom_script = custom_script_path+os.sep+settings['database']['deploy_script_filename']
+        custom_sql = settings['database']['deploy_sql_filename']
     except AttributeError:
         print "Could not find custom deploy script."
         deployed = False            

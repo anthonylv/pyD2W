@@ -7,10 +7,9 @@ This module contains the logic to run the migration.
 
 import os, subprocess
 import display_cli as cli
-import settings
 
 
-def run_migration(dbconn, database=None):
+def run_migration(settings, dbconn, database=None):
     """Migrate drupal
 
     Args:
@@ -21,9 +20,8 @@ def run_migration(dbconn, database=None):
 
     try:
         custom_script_path = os.path.dirname(os.path.realpath(__file__))
-        custom_script = custom_script_path+os.sep+settings.get_migrate_script_filename()
-        custom_sql_path = settings.get_default_project_path()            
-        custom_sql = custom_sql_path+os.sep+settings.get_migrate_sql_filename()
+        custom_script = custom_script_path+os.sep+settings['database']['migrate_script_filename']
+        custom_sql = settings['database']['migrate_sql_filename']
     except AttributeError:
         print "Could not find custom migrate script."
         migrated = False            

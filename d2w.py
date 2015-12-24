@@ -27,14 +27,87 @@ sqlscript   : Run the specified MySQL script file
 """
 
 import sys, getopt, os
+import logging, logging.handlers
+import yaml
+from datetime import datetime
 import display_cli as cli
 import prepare, migrate, deploy
-import settings as settings
 from database_interface import Database
 from MySQLdb import OperationalError
 from d2wsetup import setup_databases
 
-def run_diagnostics(database=None):
+logger = logging.getLogger()
+
+
+def setup_logging(settings):
+    """Log output
+
+        Sends log output to console or file,
+        depending on error level
+    """
+    try:
+        log_filename = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            settings['log_filename']
+        )
+        log_max_bytes = settings['log_max_bytes']
+        log_backup_count = settings['log_backup_count']
+    except KeyError as ex:
+        print "WARNING: Missing logfile setting {}. Using defaults.".format(ex)
+        log_filename = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "log.txt"
+        )
+        log_max_bytes = 1048576 #1MB
+        log_backup_count = 5
+
+    logger.setLevel(logging.DEBUG)
+    # Set up logging to file
+    file_handler = logging.handlers.RotatingFileHandler(
+        filename=log_filename,
+        maxBytes=log_max_bytes,
+        backupCount=log_backup_count
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        '%(asctime)s %(name)-15s %(levelname)-8s %(message)s',
+        '%m-%d %H:%M'
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    # Handler to write INFO messages or higher to sys.stderr
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(levelname)-8s %(message)s')
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    logger.debug("---------------------------------")
+    logger.debug(
+        "Starting log for session %s",
+        datetime.now().strftime("%Y%m%d%H%M%S%f")
+    )
+
+
+def get_settings():
+    """Get settings from external YAML file
+    """
+    settings = {}
+    settings_file = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "settings.yml"
+    )
+    try:
+        with open(settings_file, 'r') as ymlfile:
+            settings = yaml.load(ymlfile)
+    except IOError:
+        logger.error("Could not open settings file")
+    else:
+        logger.debug("Opened settings file")
+    return settings
+
+
+def run_diagnostics(settings, database=None):
     """ Show Drupal database analysis but don't alter any Drupal CMS tables.
 
     Args:
@@ -44,27 +117,31 @@ def run_diagnostics(database=None):
     
     try:
         if not database:
-            database = settings.get_drupal_database()
+            database = settings['database']['drupal_database']
 
         dbconn = Database(
-            settings.get_drupal_host(),
-            settings.get_drupal_username(),
-            settings.get_drupal_password(),
+            settings['database']['drupal_host'],
+            settings['database']['drupal_username'],
+            settings['database']['drupal_password'],
             database
         )
     except AttributeError:
-        print "Settings file is missing database information."        
+        logging.error("Settings file is missing database information.") 
     except OperationalError:
-        print "Could not access the database. Aborting database creation."
+        logging.error(
+            "Could not access the database. "
+            "Aborting database creation."
+        )
     else:
         drupal_version = dbconn.get_drupal_version()
         
         if drupal_version:
-            print "Checking tables..."
+            logging.debug("Checking tables...")
             all_tables_present = check_tables(dbconn, float(drupal_version))
         else:
             drupal_version = "Unknown"
-            print "Could not check tables since the Drupal version is unknown."
+            logging.error(
+                "Could not check tables since the Drupal version is unknown.")
 
         try:
             # General analysis of Drupal database properties
@@ -74,16 +151,17 @@ def run_diagnostics(database=None):
             drupal_node_types = dbconn.get_drupal_node_types()
             drupal_node_types_count = len(drupal_node_types)
             drupal_node_count_by_type = dbconn.get_drupal_node_count_by_type()
-            print "Looking for common problems"
+            logging.debug("Looking for common problems")
             # Look for common problems
             duplicate_terms_count = len(dbconn.get_drupal_duplicate_term_names())
             terms_exceeded_char_count = len(dbconn.get_terms_exceeded_charlength())
             duplicate_aliases_count = len(dbconn.get_duplicate_aliases())
         except Exception as ex:
-            print (
-                "Could not run diagnostics. "
-                "Please use a database interface that supports Drupal version {}."
-            ).format(drupal_version)
+            logging.error(
+                "Could not run diagnostics. Please use a database interface "
+                "that supports Drupal version %s.",
+                drupal_version
+            )
         else:
             results = {
                 "sitename": drupal_sitename,
@@ -140,8 +218,10 @@ def check_tables(dbconn, drupal_version):
     ]    
 
     if drupal_version < 7.0:
+        logging.debug("Using D6 tables")
         tables = tables_d6
     else:
+        logging.debug("Using D7 tables")
         tables = tables_d7
 
     for table in tables:
@@ -154,7 +234,7 @@ def check_tables(dbconn, drupal_version):
     return all_tables_present
 
 
-def run_sql_script(filename, database=None):
+def run_sql_script(settings, filename, database=None):
     """Run a specified mySQL script.
 
     Args:
@@ -166,31 +246,34 @@ def run_sql_script(filename, database=None):
     """
     result = False
     if not database:
-        database = settings.get_drupal_database()
+        database = settings['database']['drupal_database']
     
     try:
         dbconn = Database(
-            settings.get_drupal_host(),
-            settings.get_drupal_username(),
-            settings.get_drupal_password(),
+            settings['database']['drupal_host'],
+            settings['database']['drupal_username'],
+            settings['database']['drupal_password'],
             database
         )
     except AttributeError:
-        print "Settings file is missing database information."        
+        logging.error("Settings file is missing database information.") 
     except OperationalError:
-        print "Could not access the database. Aborting database creation."
+        logging.error(
+            "Could not access the database. "
+            "Aborting database creation."
+        )
     else:    
         if os.path.isfile(filename):
             if dbconn.connected():
                 result = dbconn.execute_sql_file(filename, database)
             else:
-                print "No database connection"
+                logging.error("No database connection")
         else:
-            print "No script file found at: "+filename
+            logging.error("No script file found at: %s", filename)
     return result
 
 
-def process_migration(database=None):
+def process_migration(settings, database=None):
     # Continue unless something happens to abort process
     continue_script = True
     print "The migration process will alter your database"
@@ -199,32 +282,37 @@ def process_migration(database=None):
     if continue_script:
         try:
             if not database:
-                database = settings.get_drupal_database()
+                database = settings['database']['drupal_database']
 
             dbconn = Database(
-                settings.get_drupal_host(),
-                settings.get_drupal_username(),
-                settings.get_drupal_password(),
+                settings['database']['drupal_host'],
+                settings['database']['drupal_username'],
+                settings['database']['drupal_password'],
                 database
             )
         except AttributeError:
-            print "Settings file is missing database information."        
+            logger.error("Settings file is missing database information.") 
         except OperationalError:
-            print "Could not access the database. Aborting database creation."
+            logger.error(
+                "Could not access the database. Aborting database creation."
+            )
         else:
             cli.print_header("Preparing {} for migration".format(database))
-            continue_script = prepare.prepare_migration(dbconn, database)
+            continue_script = prepare.prepare_migration(settings, dbconn, database)
             
     if continue_script:
         if check_migration_prerequisites(dbconn, database):
             cli.print_header("Migrating content from {}".format(database))
-            continue_script = migrate.run_migration(dbconn, database)
+            continue_script = migrate.run_migration(settings, dbconn, database)
         else:
-            print "Migration aborted because it did not meet the prerequistes for success."
+            logging.critical(
+                "Migration aborted because it did not meet "
+                "the prerequistes for success."
+            )
 
     if continue_script:
         cli.print_header("Deploying to test environment")
-        continue_script = deploy.deploy_database(dbconn, database)
+        continue_script = deploy.deploy_database(settings, dbconn, database)
 
     if not continue_script:
         sys.exit(1)
@@ -239,13 +327,13 @@ def check_migration_prerequisites(dbconn, database=None):
     Returns:
         True if OK to proceed; False if migration should be aborted.
     """
-    print "Checking migration prerequisites"
+    logger.debug("Checking migration prerequisites")
     custom_sql_exists = False
     custom_script_exists = False
     problems_fixed = False
     success = False
     if dbconn.connected():
-        diagnostic_results = run_diagnostics(database)
+        diagnostic_results = run_diagnostics(settings, database)
         duplicate_terms_count = diagnostic_results["duplicate_terms_count"]
         terms_exceeded_char_count = diagnostic_results["terms_exceeded_char_count"]
         duplicate_aliases_count = diagnostic_results["duplicate_aliases_count"]
@@ -256,33 +344,36 @@ def check_migration_prerequisites(dbconn, database=None):
             print "There are problems that must be fixed before migrating"
             print "Please re-run '-a migrate' to continue with the migration"
         else:
-            print "Common migration problems fixed"
+            logger.info("Common migration problems fixed")
             problems_fixed = True
     else:
-        print "No database connection"
+        logger.error("No database connection")
 
     # Is there a miration script present?
     custom_script_path = os.path.dirname(os.path.realpath(__file__))
-    custom_script = custom_script_path+os.sep+settings.get_migrate_script_filename()
-    custom_sql_path = settings.get_default_project_path()            
-    custom_sql = custom_sql_path+os.sep+settings.get_migrate_sql_filename()
+    custom_script = custom_script_path+os.sep+settings['database']['migrate_script_filename']
+    custom_sql_path = settings['database']['default_project_path']
+    custom_sql = custom_sql_path+os.sep+settings['database']['migrate_sql_filename']
     if os.path.isfile(custom_sql):
         custom_sql_exists = True
     if os.path.isfile(custom_script):
         custom_script_exists = True
     if not (custom_sql_exists or custom_script_exists):
-        print "You need either an SQL or Python migration script present to run the migration"
+        print (
+            "You need either an SQL or Python migration script "
+            "present to run the migration"
+        )
     # Only proceed with migration if problems have been fixed AND either
     # SQL or Python migration script is present
     success = problems_fixed and (custom_sql_exists or custom_script_exists)
     if success:
-        print "OK to proceed with migration"
+        logger.info("OK to proceed with migration")
     else:
-        print "Cannot proceed with migration"
+        logger.error("Cannot proceed with migration")
     return success
 
 
-def process_action(action, options):
+def process_action(settings, action, options):
     """Process the command line options.
 
     Args:
@@ -299,15 +390,15 @@ def process_action(action, options):
     # Process command line options and arguments
     if action in ['analyse', 'analyze']:
         cli.print_header("Starting Drupal To WordPress diagnostics")
-        diagnostics_results = run_diagnostics(selected_database)
+        diagnostics_results = run_diagnostics(settings, selected_database)
         if diagnostics_results:
             cli.print_diagnostics(diagnostics_results)
     elif action == 'migrate':
-        process_migration(selected_database)
+        process_migration(settings, selected_database)
     elif action == 'sqlscript':
         # Has the user specified a sql script?
         if 'script_option' in options:
-            run_sql_script(options['script_option'], selected_database)
+            run_sql_script(settings, options['script_option'], selected_database)
         else:
             print "You need to provide a path to the script."
             cli.print_usage()
@@ -323,6 +414,10 @@ def main(argv):
     Args:
         argv: The command line options.
     """
+    settings = get_settings()
+    setup_logging(settings['d2w'])
+
+
     try:
         opts, args = getopt.getopt(
             argv,
@@ -351,10 +446,12 @@ def main(argv):
                 action = arg
     # Only process actions after getting all the specified options
     if action:
-        process_action(action, options)
+        process_action(settings, action, options)
     else:
-        print "You need to specify an action to perform or use -h flag to view usage instructions."
-
+        print (
+            "You need to specify an action to perform "
+            "or use -h flag to view usage instructions."
+        )
 
 # Program entry point
 if __name__ == "__main__":
