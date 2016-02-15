@@ -38,6 +38,7 @@ __pycache__/
 
 # This may contain sensitive login information
 # and not intended for commits
+custom-*
 settings.yml
 settings.py
 settings-*

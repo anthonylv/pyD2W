@@ -27,32 +27,26 @@ def prepare_migration(settings, dbconn, database=None):
     Tries to fix any issues in the database and runs any
     custom MySQL and Python scripts in the project directory
     """
-    prepared = True
+    prepared = False
     fixed = run_fix(dbconn)
 
     if fixed:
         try:
-            custom_script_path = os.path.dirname(os.path.realpath(__file__))
-            custom_script = custom_script_path+os.sep+settings['database']['get_prepare_script_filename']
-            custom_sql = settings['database']['prepare_sql_filename']
+            custom_sql = settings['sql']['prepare_sql_filename']
         except AttributeError:
             print "Could not find custom prepare script."
-            prepared = False            
-            raise
-        except Exception as ex:
-            prepared = False     
-            raise
         else:
             if os.path.isfile(custom_sql):
                 prepared = dbconn.execute_sql_file(custom_sql, database)
             else:
                 print "No custom prepare SQL found at {}".format(custom_sql)
-    
-            if os.path.isfile(custom_script):
-                print "Execute custom prepare script at {}".format(custom_script)
-                subprocess.check_call(["python", custom_script])
-            else:
-                print "No custom prepare scripts found {}".format(custom_script)
+            #################################
+            # Put any custom steps here
+            #################################
+            # Begin custom steps
+
+            # End custom steps
+            #################################
     else:
         print "Aborted database preparation. There were problems that couldn't be fixed."
         prepared = False

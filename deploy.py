@@ -16,29 +16,23 @@ def deploy_database(settings, dbconn, database=None):
     
     Deploy the database tables into the staging server.
     """
-    deployed = True
+    deployed = False
 
     try:
-        custom_script_path = os.path.dirname(os.path.realpath(__file__))
-        custom_script = custom_script_path+os.sep+settings['database']['deploy_script_filename']
-        custom_sql = settings['database']['deploy_sql_filename']
+        custom_sql = settings['sql']['deploy_sql_filename']
     except AttributeError:
         print "Could not find custom deploy script."
-        deployed = False            
-        raise
-    except Exception as ex:
-        deployed = False     
-        raise
     else:
         if os.path.isfile(custom_sql):
             deployed = dbconn.execute_sql_file(custom_sql, database)
         else:
             print "No custom deploy SQL found at {}".format(custom_sql)
+        #################################
+        # Put any custom steps here
+        #################################
+        # Begin custom steps
 
-        if os.path.isfile(custom_script):
-            print "Execute custom deploy script at {}".format(custom_script)
-            subprocess.check_call(["python", custom_script])
-        else:
-            print "No custom deploy scripts found {}".format(custom_script)
+        # End custom steps
+        #################################
     return deployed
             

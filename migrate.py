@@ -16,29 +16,23 @@ def run_migration(settings, dbconn, database=None):
         database: An open connection to the Drupal database.
         
     """
-    migrated = True
+    migrated = False
 
     try:
-        custom_script_path = os.path.dirname(os.path.realpath(__file__))
-        custom_script = custom_script_path+os.sep+settings['database']['migrate_script_filename']
-        custom_sql = settings['database']['migrate_sql_filename']
+        custom_sql = settings['sql']['migrate_sql_filename']
     except AttributeError:
         print "Could not find custom migrate script."
-        migrated = False            
-        raise
-    except Exception as ex:
-        migrated = False     
-        raise
     else:
         if os.path.isfile(custom_sql):
             migrated = dbconn.execute_sql_file(custom_sql, database)
         else:
             print "No custom migrate SQL found at {}".format(custom_sql)
+        #################################
+        # Put any custom steps here
+        #################################
+        # Begin custom steps
 
-        if os.path.isfile(custom_script):
-            print "Execute custom migrate script at {}".format(custom_script)
-            subprocess.check_call(["python", custom_script])
-        else:
-            print "No custom migrate scripts found {}".format(custom_script)
+        # End custom steps
+        #################################
     return migrated
             

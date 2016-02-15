@@ -22,7 +22,6 @@ Options:
 Actions:
 analyse     : Analyse the Drupal database
 migrate     : Run the migration script
-reset       : Reset the tables into a clean state ready for another migration pass
 sqlscript   : Run the specified MySQL script file
 """
 
@@ -34,7 +33,6 @@ import display_cli as cli
 import prepare, migrate, deploy
 from database_interface import Database
 from MySQLdb import OperationalError
-from d2wsetup import setup_databases
 
 logger = logging.getLogger()
 
@@ -133,8 +131,14 @@ def run_diagnostics(settings, database=None):
             "Aborting database creation."
         )
     else:
-        drupal_version = dbconn.get_drupal_version()
-        
+        try:
+            drupal_version = dbconn.get_drupal_version()
+        except OperationalError:
+            drupal_version = None
+            logging.warning(
+                "Could not get Drupal version."
+            )
+            
         if drupal_version:
             logging.debug("Checking tables...")
             all_tables_present = check_tables(dbconn, float(drupal_version))
@@ -301,7 +305,7 @@ def process_migration(settings, database=None):
             continue_script = prepare.prepare_migration(settings, dbconn, database)
             
     if continue_script:
-        if check_migration_prerequisites(dbconn, database):
+        if check_migration_prerequisites(settings, dbconn, database):
             cli.print_header("Migrating content from {}".format(database))
             continue_script = migrate.run_migration(settings, dbconn, database)
         else:
@@ -318,7 +322,7 @@ def process_migration(settings, database=None):
         sys.exit(1)
 
 
-def check_migration_prerequisites(dbconn, database=None):
+def check_migration_prerequisites(settings, dbconn, database=None):
     """Run the migration script.
 
     Args:
@@ -327,10 +331,9 @@ def check_migration_prerequisites(dbconn, database=None):
     Returns:
         True if OK to proceed; False if migration should be aborted.
     """
-    logger.debug("Checking migration prerequisites")
+    print "Checking migration prerequisites..."
     custom_sql_exists = False
     custom_script_exists = False
-    problems_fixed = False
     success = False
     if dbconn.connected():
         diagnostic_results = run_diagnostics(settings, database)
@@ -345,27 +348,10 @@ def check_migration_prerequisites(dbconn, database=None):
             print "Please re-run '-a migrate' to continue with the migration"
         else:
             logger.info("Common migration problems fixed")
-            problems_fixed = True
+            success = True
     else:
         logger.error("No database connection")
 
-    # Is there a miration script present?
-    custom_script_path = os.path.dirname(os.path.realpath(__file__))
-    custom_script = custom_script_path+os.sep+settings['database']['migrate_script_filename']
-    custom_sql_path = settings['database']['default_project_path']
-    custom_sql = custom_sql_path+os.sep+settings['database']['migrate_sql_filename']
-    if os.path.isfile(custom_sql):
-        custom_sql_exists = True
-    if os.path.isfile(custom_script):
-        custom_script_exists = True
-    if not (custom_sql_exists or custom_script_exists):
-        print (
-            "You need either an SQL or Python migration script "
-            "present to run the migration"
-        )
-    # Only proceed with migration if problems have been fixed AND either
-    # SQL or Python migration script is present
-    success = problems_fixed and (custom_sql_exists or custom_script_exists)
     if success:
         logger.info("OK to proceed with migration")
     else:
@@ -402,8 +388,6 @@ def process_action(settings, action, options):
         else:
             print "You need to provide a path to the script."
             cli.print_usage()
-    elif action == "reset":
-        setup_databases()
     else:
         cli.print_usage()
 

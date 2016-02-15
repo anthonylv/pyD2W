@@ -29,7 +29,7 @@ attempts. Since migrations can often take several passes of fine-tuning, it can 
 to reset your databases.
 
 (3) Run the utility using the help flag to view the available commands:
-python drupaltowordpress.py -h
+python d2w.py -h
 
 
 --- CAUTION ---

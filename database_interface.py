@@ -138,7 +138,7 @@ class Database:
                 cur.close()
                 raise
             except mdb.Warning, warn:
-                self._logger.error("Warning: %s", warn)
+                self._logger.warning("%s", warn)
                 raise
         return results
 

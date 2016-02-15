@@ -99,7 +99,6 @@ Options:
 Actions:
 analyse     : Analyse the Drupal database
 migrate     : Run the migration script
-reset       : Reset the tables into a clean state ready for another migration pass
 sqlscript   : Run the specified MySQL script file
 
 """
