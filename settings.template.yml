@@ -1,0 +1,45 @@
+d2w:
+    log_filename: log.txt
+    log_max_bytes: 1048576
+    log_backup_count: 5
+
+database:
+    drupal_host: localhost
+    drupal_username: 
+    drupal_password: 
+    drupal_database: 
+    wordpress_host: 127.0.0.1
+    wordpress_useraname: 
+    wordpress_password: 
+    wordpress_database: 
+    # A user with CREATE privilege to create the tables
+    admin_username: 
+    admin_password: 
+
+project:
+    # The directory where you'll store the project files for this migration.
+    default_project_path: ""    
+
+############################################################
+# Your migration SQL scripts
+############################################################
+sql:
+    # This will normally be the database dump of a fresh WordPress installation.
+    # It is not expected to change across different migration projects.
+    wordpress_setup_script: ""
+
+    # This will be the database dump of the client's Drupal installation.
+    # Each migration project will have a specific dump file.
+    drupal_setup_script: ""
+
+    # An SQL script containing any custom setup queries.
+    setup_sql_filename: ""
+    
+    # An SQL script containing any custom preparation queries.
+    prepare_sql_filename: ""
+
+    # The standard migration SQL script may not work on all Drupal configurations.
+    migrate_sql_filename: ""
+
+    # An SQL script containing any custom deployment queries.
+    deploy_sql_filename: ""
